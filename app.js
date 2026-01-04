@@ -2,9 +2,6 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-// Import models
-const { User, Game, Post, Comment, Like } = require('./models');
-
 const app = express();
 
 // Middleware
@@ -18,6 +15,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Routes
+app.use('/api/auth', require('./routes/auth'));
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 
@@ -27,36 +27,19 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Test database connection and models
-app.get('/api/test-db', async (req, res) => {
-  try {
-    // Test creating a sample user (won't save due to validation)
-    const sampleUser = new User({
-      username: 'testuser',
-      email: 'test@example.com',
-      password: 'password123'
-    });
-    
-    // Test model validation
-    await sampleUser.validate();
-    
-    res.json({
-      message: 'Database models are working correctly!',
-      models: ['User', 'Game', 'Post', 'Comment', 'Like'],
-      status: 'All models loaded successfully'
-    });
-  } catch (error) {
-    res.status(500).json({
-      error: 'Model test failed',
-      message: error.message
-    });
-  }
+// Test route
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    message: 'Backend is working!',
+    features: ['Users', 'Games', 'Forum Posts', 'Comments', 'Authentication']
+  });
 });
 
 // Error handling
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 
+    success: false,
     error: 'Something went wrong!',
     message: process.env.NODE_ENV === 'development' ? err.message : 'Internal server error'
   });
@@ -65,6 +48,7 @@ app.use((err, req, res, next) => {
 // 404 handler
 app.use('*', (req, res) => {
   res.status(404).json({ 
+    success: false,
     error: 'Route not found',
     path: req.originalUrl 
   });

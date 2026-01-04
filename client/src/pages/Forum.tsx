@@ -12,7 +12,6 @@ import {
   Search
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import Layout from '@/components/layout/Layout';
 
 // Mock data for categories
@@ -195,13 +194,7 @@ const Forum: React.FC = () => {
                 <div className="flex items-center gap-4 mb-6">
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder="Search discussions..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                    />
+                    
                   </div>
                   <Button variant="outline" size="icon">
                     <Filter className="w-4 h-4" />
