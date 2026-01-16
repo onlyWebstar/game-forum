@@ -1,225 +1,255 @@
+// components/layout/Navbar.tsx
 import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { 
-  Gamepad2, 
-  Home, 
-  MessageSquare, 
-  Search, 
-  User, 
-  Menu, 
-  X,
-  LogOut,
-  Settings,
-  Bell
-} from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Gamepad2, Menu, X, Search, User, LogOut, Settings as SettingsIcon, Shield, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/AuthContext';
+import SearchModal from '@/components/SearchModal';
 
 const Navbar: React.FC = () => {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
-  const location = useLocation();
+  const navigate = useNavigate();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
-  const navLinks = [
-    { path: '/', label: 'Home', icon: Home },
-    { path: '/games', label: 'Games', icon: Gamepad2 },
-    { path: '/forum', label: 'Forum', icon: MessageSquare },
-  ];
-
-  const isActive = (path: string) => location.pathname === path;
+  const handleLogout = () => {
+    logout();
+    setUserMenuOpen(false);
+    navigate('/');
+  };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 glass-card border-b border-border/50">
+    <nav className="sticky top-0 z-50 glass-card border-b border-border">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <Link 
-            to="/" 
-            className="flex items-center gap-2 group"
-          >
-            <div className="relative">
-              <Gamepad2 className="w-8 h-8 text-primary transition-all duration-300 group-hover:scale-110" />
-              <div className="absolute inset-0 bg-primary/30 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            </div>
-            <span className="font-display text-xl font-bold gradient-text hidden sm:block">
-              NEXUS
-            </span>
+          <Link to="/" className="flex items-center gap-2 group">
+            <Gamepad2 className="w-8 h-8 text-primary group-hover:scale-110 transition-transform" />
+            <span className="font-display text-2xl font-bold gradient-text">NEXUS</span>
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-1">
-            {navLinks.map((link) => {
-              const Icon = link.icon;
-              return (
-                <Link
-                  key={link.path}
-                  to={link.path}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all duration-300 ${
-                    isActive(link.path)
-                      ? 'text-primary bg-primary/10 neon-border'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  <Icon className="w-4 h-4" />
-                  <span>{link.label}</span>
-                </Link>
-              );
-            })}
+          <div className="hidden md:flex items-center gap-6">
+            <Link
+              to="/"
+              className="text-foreground hover:text-primary transition-colors font-medium"
+            >
+              Home
+            </Link>
+            <Link
+              to="/games"
+              className="text-foreground hover:text-primary transition-colors font-medium"
+            >
+              Games
+            </Link>
+            <Link
+              to="/forum"
+              className="text-foreground hover:text-primary transition-colors font-medium"
+            >
+              Forum
+            </Link>
           </div>
 
-          {/* Search & Actions */}
-          <div className="flex items-center gap-3">
-            {/* Search */}
-            <div className={`relative transition-all duration-300 ${isSearchOpen ? 'w-64' : 'w-10'}`}>
-              {isSearchOpen ? (
-                <div className="relative">
-                  <Input
-                    type="text"
-                    placeholder="Search games, posts..."
-                    className="pr-10"
-                    autoFocus
-                    onBlur={() => setIsSearchOpen(false)}
-                  />
-                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                </div>
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setIsSearchOpen(true)}
-                  className="text-muted-foreground hover:text-primary"
-                >
-                  <Search className="w-5 h-5" />
-                </Button>
-              )}
-            </div>
+          {/* Right Side Actions */}
+          <div className="hidden md:flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => setSearchOpen(true)}>
+              <Search className="w-5 h-5" />
+            </Button>
 
-            {/* Auth Buttons / User Menu */}
-            {isAuthenticated ? (
-              <div className="hidden md:flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary relative">
-                  <Bell className="w-5 h-5" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-accent rounded-full" />
-                </Button>
-                <div className="relative group">
-                  <button className="flex items-center gap-2 p-1 rounded-lg hover:bg-muted transition-colors">
-                    <img
-                      src={user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.username}`}
-                      alt={user?.username}
-                      className="w-8 h-8 rounded-full border-2 border-primary/50"
+            {isAuthenticated && user ? (
+              <div className="relative">
+                <button
+                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                >
+                  <img
+                    src={user.avatar || `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${user.username}`}
+                    alt={user.username}
+                    className="w-8 h-8 rounded-full border-2 border-primary"
+                  />
+                  <span className="font-medium">{user.username}</span>
+                </button>
+
+                {/* User Dropdown Menu */}
+                {userMenuOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setUserMenuOpen(false)}
                     />
-                  </button>
-                  <div className="absolute right-0 top-full mt-2 w-48 glass-card rounded-xl p-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
-                    <Link
-                      to={`/profile/${user?.username}`}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors"
-                    >
-                      <User className="w-4 h-4" />
-                      Profile
-                    </Link>
-                    <Link
-                      to="/settings"
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors"
-                    >
-                      <Settings className="w-4 h-4" />
-                      Settings
-                    </Link>
-                    <hr className="my-2 border-border" />
-                    <button
-                      onClick={logout}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-destructive hover:bg-destructive/10 w-full transition-colors"
-                    >
-                      <LogOut className="w-4 h-4" />
-                      Logout
-                    </button>
-                  </div>
-                </div>
+                    <div className="absolute right-0 mt-2 w-56 glass-card rounded-lg shadow-lg border border-border overflow-hidden z-50">
+                      <div className="p-3 border-b border-border">
+                        <p className="font-semibold text-foreground">{user.username}</p>
+                        <p className="text-sm text-muted-foreground">{user.email}</p>
+                      </div>
+                      <div className="py-2">
+                        <Link
+                          to={`/profile/${user.username}`}
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-muted transition-colors"
+                        >
+                          <User className="w-4 h-4" />
+                          <span>Profile</span>
+                        </Link>
+                        <Link
+                          to="/profile/edit"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-muted transition-colors"
+                        >
+                          <Edit className="w-4 h-4" />
+                          <span>Edit Profile</span>
+                        </Link>
+                        <Link
+                          to="/settings"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-muted transition-colors"
+                        >
+                          <SettingsIcon className="w-4 h-4" />
+                          <span>Settings</span>
+                        </Link>
+                        {user.role === 'admin' && (
+                          <Link
+                            to="/admin/dashboard"
+                            onClick={() => setUserMenuOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2 hover:bg-muted transition-colors text-primary"
+                          >
+                            <Shield className="w-4 h-4" />
+                            <span>Admin Dashboard</span>
+                          </Link>
+                        )}
+                      </div>
+                      <div className="border-t border-border py-2">
+                        <button
+                          onClick={handleLogout}
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-muted transition-colors w-full text-left text-red-500"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span>Logout</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
-              <div className="hidden md:flex items-center gap-2">
+              <div className="flex items-center gap-2">
                 <Link to="/login">
                   <Button variant="ghost">Login</Button>
                 </Link>
                 <Link to="/register">
-                  <Button variant="neon">Join Now</Button>
+                  <Button>Sign Up</Button>
                 </Link>
               </div>
             )}
-
-            {/* Mobile Menu Toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            >
-              {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </Button>
           </div>
+
+          {/* Mobile Menu Button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="md:hidden p-2"
+          >
+            {mobileMenuOpen ? (
+              <X className="w-6 h-6" />
+            ) : (
+              <Menu className="w-6 h-6" />
+            )}
+          </button>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden py-4 space-y-2 border-t border-border">
+            <Link
+              to="/"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-4 py-2 hover:bg-muted rounded-lg transition-colors"
+            >
+              Home
+            </Link>
+            <Link
+              to="/games"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-4 py-2 hover:bg-muted rounded-lg transition-colors"
+            >
+              Games
+            </Link>
+            <Link
+              to="/forum"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block px-4 py-2 hover:bg-muted rounded-lg transition-colors"
+            >
+              Forum
+            </Link>
+
+            {isAuthenticated && user ? (
+              <>
+                <div className="border-t border-border my-2 pt-2">
+                  <Link
+                    to={`/profile/${user.username}`}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-4 py-2 hover:bg-muted rounded-lg transition-colors"
+                  >
+                    Profile
+                  </Link>
+                  <Link
+                    to="/profile/edit"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-4 py-2 hover:bg-muted rounded-lg transition-colors"
+                  >
+                    Edit Profile
+                  </Link>
+                  <Link
+                    to="/settings"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-4 py-2 hover:bg-muted rounded-lg transition-colors"
+                  >
+                    Settings
+                  </Link>
+                  {user.role === 'admin' && (
+                    <Link
+                      to="/admin/dashboard"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="block px-4 py-2 hover:bg-muted rounded-lg transition-colors text-primary"
+                    >
+                      Admin Dashboard
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => {
+                      handleLogout();
+                      setMobileMenuOpen(false);
+                    }}
+                    className="block w-full text-left px-4 py-2 hover:bg-muted rounded-lg transition-colors text-red-500"
+                  >
+                    Logout
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="border-t border-border my-2 pt-2 space-y-2">
+                <Link
+                  to="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-2 hover:bg-muted rounded-lg transition-colors"
+                >
+                  Login
+                </Link>
+                <Link
+                  to="/register"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-2 bg-primary text-primary-foreground rounded-lg transition-colors text-center"
+                >
+                  Sign Up
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Mobile Menu */}
-      <div
-        className={`md:hidden absolute top-full left-0 right-0 glass-card border-b border-border/50 transition-all duration-300 ${
-          isMobileMenuOpen ? 'opacity-100 visible' : 'opacity-0 invisible'
-        }`}
-      >
-        <div className="container mx-auto px-4 py-4 space-y-2">
-          {navLinks.map((link) => {
-            const Icon = link.icon;
-            return (
-              <Link
-                key={link.path}
-                to={link.path}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all ${
-                  isActive(link.path)
-                    ? 'text-primary bg-primary/10'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                <Icon className="w-5 h-5" />
-                <span>{link.label}</span>
-              </Link>
-            );
-          })}
-          <hr className="border-border my-2" />
-          {isAuthenticated ? (
-            <>
-              <Link
-                to={`/profile/${user?.username}`}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
-              >
-                <User className="w-5 h-5" />
-                Profile
-              </Link>
-              <button
-                onClick={() => {
-                  logout();
-                  setIsMobileMenuOpen(false);
-                }}
-                className="flex items-center gap-3 px-4 py-3 rounded-lg text-destructive hover:bg-destructive/10 w-full"
-              >
-                <LogOut className="w-5 h-5" />
-                Logout
-              </button>
-            </>
-          ) : (
-            <div className="flex gap-2 pt-2">
-              <Link to="/login" className="flex-1" onClick={() => setIsMobileMenuOpen(false)}>
-                <Button variant="outline" className="w-full">Login</Button>
-              </Link>
-              <Link to="/register" className="flex-1" onClick={() => setIsMobileMenuOpen(false)}>
-                <Button variant="neon" className="w-full">Join</Button>
-              </Link>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Search Modal */}
+      <SearchModal isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
     </nav>
   );
 };

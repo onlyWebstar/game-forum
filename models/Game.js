@@ -1,57 +1,88 @@
+// models/Game.js
 const mongoose = require('mongoose');
 
 const gameSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, 'Game title is required'],
-    trim: true,
-    maxlength: [100, 'Title cannot exceed 100 characters']
+    required: true,
+    trim: true
   },
+  slug: {
+    type: String,
+    required: true,
+    unique: true,
+    lowercase: true
+  },
+  coverImage: {
+    type: String,
+    required: true
+  },
+  bannerImage: {
+    type: String
+  },
+  screenshots: [{
+    url: String,
+    caption: String
+  }],
   description: {
     type: String,
-    required: [true, 'Game description is required'],
-    maxlength: [2000, 'Description cannot exceed 2000 characters']
+    required: true
+  },
+  shortDescription: {
+    type: String,
+    maxlength: 200
   },
   developer: {
     type: String,
-    required: [true, 'Developer name is required'],
-    trim: true
+    required: true
   },
   publisher: {
-    type: String,
-    trim: true
+    type: String
   },
   releaseDate: {
     type: Date,
-    required: [true, 'Release date is required']
+    required: true
   },
   genres: [{
     type: String,
-    trim: true
+    enum: ['Action', 'Adventure', 'RPG', 'Strategy', 'Simulation', 'Sports', 'Racing', 'Puzzle', 'Horror', 'FPS', 'MMORPG', 'Indie', 'Fighting', 'Platformer', 'Battle Royale']
   }],
   platforms: [{
     type: String,
-    enum: ['PC', 'PlayStation', 'Xbox', 'Nintendo Switch', 'Mobile', 'Other']
+    enum: ['PC', 'PlayStation 5', 'PlayStation 4', 'Xbox Series X/S', 'Xbox One', 'Nintendo Switch', 'Mobile', 'VR']
   }],
-  coverImage: {
-    type: String,
-    default: '/images/default-game-cover.jpg'
-  },
-  screenshots: [{
-    type: String
-  }],
-  officialWebsite: {
-    type: String,
-    trim: true
-  },
   metacriticScore: {
     type: Number,
     min: 0,
     max: 100
   },
+  officialWebsite: {
+    type: String
+  },
+  tags: [{
+    type: String
+  }],
+  // Stats
+  postsCount: {
+    type: Number,
+    default: 0
+  },
+  followersCount: {
+    type: Number,
+    default: 0
+  },
+  viewsCount: {
+    type: Number,
+    default: 0
+  },
+  // Status
   isActive: {
     type: Boolean,
     default: true
+  },
+  isFeatured: {
+    type: Boolean,
+    default: false
   },
   addedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -62,18 +93,24 @@ const gameSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Index for search functionality
-gameSchema.index({ title: 'text', description: 'text' });
-
-// Virtual for post count
-gameSchema.virtual('postCount', {
-  ref: 'Post',
-  localField: '_id',
-  foreignField: 'game',
-  count: true
+// Generate slug from title
+gameSchema.pre('save', function(next) {
+  if (this.isModified('title')) {
+    this.slug = this.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  }
+  next();
 });
 
-// Enable virtuals in JSON output
-gameSchema.set('toJSON', { virtuals: true });
+// Indexes
+gameSchema.index({ title: 'text', description: 'text' });
+gameSchema.index({ slug: 1 });
+gameSchema.index({ genres: 1 });
+gameSchema.index({ platforms: 1 });
+gameSchema.index({ releaseDate: -1 });
+gameSchema.index({ metacriticScore: -1 });
+gameSchema.index({ isFeatured: 1 });
 
 module.exports = mongoose.model('Game', gameSchema);

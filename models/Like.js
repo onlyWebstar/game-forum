@@ -1,3 +1,4 @@
+// models/Like.js
 const mongoose = require('mongoose');
 
 const likeSchema = new mongoose.Schema({
@@ -8,27 +9,25 @@ const likeSchema = new mongoose.Schema({
   },
   targetType: {
     type: String,
-    required: true,
-    enum: ['Post', 'Comment']
+    enum: ['Post', 'Comment'],
+    required: true
   },
   targetId: {
     type: mongoose.Schema.Types.ObjectId,
     required: true,
     refPath: 'targetType'
   },
-  likeType: {
-    type: String,
-    enum: ['like', 'dislike'],
-    default: 'like'
+  value: {
+    type: Number,
+    enum: [1, -1], // 1 for like, -1 for dislike
+    required: true
   }
 }, {
   timestamps: true
 });
 
-// Compound index to ensure user can only like/dislike a target once
+// Compound index to ensure one like per user per target
 likeSchema.index({ user: 1, targetType: 1, targetId: 1 }, { unique: true });
-
-// Index for efficient queries
 likeSchema.index({ targetType: 1, targetId: 1 });
 
 module.exports = mongoose.model('Like', likeSchema);

@@ -3,14 +3,13 @@ const mongoose = require('mongoose');
 const postSchema = new mongoose.Schema({
   title: {
     type: String,
-    required: [true, 'Post title is required'],
+    required: true,
     trim: true,
-    maxlength: [200, 'Title cannot exceed 200 characters']
+    maxlength: 200
   },
   content: {
     type: String,
-    required: [true, 'Post content is required'],
-    maxlength: [10000, 'Content cannot exceed 10000 characters']
+    required: true
   },
   author: {
     type: mongoose.Schema.Types.ObjectId,
@@ -24,28 +23,35 @@ const postSchema = new mongoose.Schema({
   },
   postType: {
     type: String,
-    enum: ['discussion', 'review', 'guide', 'news', 'question'],
+    enum: ['discussion', 'review', 'guide', 'question'],
     default: 'discussion'
-  },
-  rating: {
-    type: Number,
-    min: 1,
-    max: 10,
-    validate: {
-      validator: function(value) {
-        // Rating is only required for review posts
-        if (this.postType === 'review') {
-          return value >= 1 && value <= 10;
-        }
-        return true;
-      },
-      message: 'Rating between 1-10 is required for reviews'
-    }
   },
   tags: [{
     type: String,
     trim: true
   }],
+  images: [{
+    url: String,
+    caption: String
+  }],
+  // Engagement
+  viewsCount: {
+    type: Number,
+    default: 0
+  },
+  likesCount: {
+    type: Number,
+    default: 0
+  },
+  dislikesCount: {
+    type: Number,
+    default: 0
+  },
+  commentsCount: {
+    type: Number,
+    default: 0
+  },
+  // Moderation
   isPinned: {
     type: Boolean,
     default: false
@@ -54,42 +60,50 @@ const postSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  viewCount: {
+  isFeatured: {
+    type: Boolean,
+    default: false
+  },
+  isDeleted: {
+    type: Boolean,
+    default: false
+  },
+  deletedAt: {
+    type: Date
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  // Flags/Reports
+  flagsCount: {
     type: Number,
     default: 0
+  },
+  lastActivityAt: {
+    type: Date,
+    default: Date.now
   }
 }, {
   timestamps: true
 });
 
-// Index for efficient queries
-postSchema.index({ game: 1, createdAt: -1 });
-postSchema.index({ author: 1, createdAt: -1 });
+// Update lastActivityAt on save
+postSchema.pre('save', function(next) {
+  if (this.isModified('commentsCount')) {
+    this.lastActivityAt = new Date();
+  }
+  next();
+});
+
+// Indexes
+postSchema.index({ author: 1 });
+postSchema.index({ game: 1 });
 postSchema.index({ postType: 1 });
-
-// Virtual for like count
-postSchema.virtual('likeCount', {
-  ref: 'Like',
-  localField: '_id',
-  foreignField: 'targetId',
-  count: true
-});
-
-// Virtual for comment count
-postSchema.virtual('commentCount', {
-  ref: 'Comment',
-  localField: '_id',
-  foreignField: 'post',
-  count: true
-});
-
-// Enable virtuals
-postSchema.set('toJSON', { virtuals: true });
-
-// Middleware to increment view count
-postSchema.methods.incrementViews = async function() {
-  this.viewCount += 1;
-  await this.save();
-};
+postSchema.index({ createdAt: -1 });
+postSchema.index({ lastActivityAt: -1 });
+postSchema.index({ isPinned: -1, lastActivityAt: -1 });
+postSchema.index({ title: 'text', content: 'text' });
+postSchema.index({ tags: 1 });
 
 module.exports = mongoose.model('Post', postSchema);

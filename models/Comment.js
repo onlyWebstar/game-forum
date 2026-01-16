@@ -1,11 +1,11 @@
+// models/Comment.js
 const mongoose = require('mongoose');
 
 const commentSchema = new mongoose.Schema({
   content: {
     type: String,
-    required: [true, 'Comment content is required'],
-    trim: true,
-    maxlength: [2000, 'Comment cannot exceed 2000 characters']
+    required: true,
+    maxlength: 5000
   },
   author: {
     type: mongoose.Schema.Types.ObjectId,
@@ -17,10 +17,41 @@ const commentSchema = new mongoose.Schema({
     ref: 'Post',
     required: true
   },
+  // Nested comments
   parentComment: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Comment',
     default: null
+  },
+  depth: {
+    type: Number,
+    default: 0,
+    max: 5 // Limit nesting depth
+  },
+  // Engagement
+  likesCount: {
+    type: Number,
+    default: 0
+  },
+  dislikesCount: {
+    type: Number,
+    default: 0
+  },
+  repliesCount: {
+    type: Number,
+    default: 0
+  },
+  // Moderation
+  isDeleted: {
+    type: Boolean,
+    default: false
+  },
+  deletedAt: {
+    type: Date
+  },
+  deletedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   },
   isEdited: {
     type: Boolean,
@@ -28,41 +59,19 @@ const commentSchema = new mongoose.Schema({
   },
   editedAt: {
     type: Date
+  },
+  flagsCount: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true
 });
 
-// Index for efficient queries
+// Indexes
 commentSchema.index({ post: 1, createdAt: 1 });
 commentSchema.index({ author: 1 });
 commentSchema.index({ parentComment: 1 });
-
-// Virtual for like count on comments
-commentSchema.virtual('likeCount', {
-  ref: 'Like',
-  localField: '_id',
-  foreignField: 'targetId',
-  count: true
-});
-
-// Virtual for nested replies
-commentSchema.virtual('replies', {
-  ref: 'Comment',
-  localField: '_id',
-  foreignField: 'parentComment'
-});
-
-// Enable virtuals
-commentSchema.set('toJSON', { virtuals: true });
-
-// Middleware to update editedAt
-commentSchema.pre('save', function(next) {
-  if (this.isModified('content') && !this.isNew) {
-    this.isEdited = true;
-    this.editedAt = new Date();
-  }
-  next();
-});
+commentSchema.index({ post: 1, parentComment: 1 });
 
 module.exports = mongoose.model('Comment', commentSchema);
