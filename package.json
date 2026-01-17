@@ -3,16 +3,17 @@
   "version": "1.0.0",
   "description": "Game Discussion Forum Backend API",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "build": "echo 'No build step required for backend'"
   },
-  "keywords": [
-    "gaming",
-    "forum",
-    "api"
-  ],
+  "keywords": ["gaming", "forum", "api"],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -26,7 +27,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
     "multer": "^1.4.5-lts.1",
-    "nodemailer": "^6.10.1",
+    "nodemailer": "^6.9.7",
     "passport": "^0.7.0",
     "passport-discord": "^0.1.4",
     "passport-google-oauth20": "^2.0.0",

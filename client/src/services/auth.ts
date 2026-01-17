@@ -33,11 +33,13 @@ export const authService = {
 
   // Google OAuth
   googleLogin: () => {
-    window.location.href = 'http://localhost:5000/api/auth/google';
+    const backendUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    window.location.href = `${backendUrl}/api/auth/google`;
   },
 
   // Discord OAuth
   discordLogin: () => {
-    window.location.href = 'http://localhost:5000/api/auth/discord';
+    const backendUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5000';
+    window.location.href = `${backendUrl}/api/auth/discord`;
   },
 };
