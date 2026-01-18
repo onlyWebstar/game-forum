@@ -84,7 +84,20 @@ app.use('/api/search', searchRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date() });
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date(),
+    uptime: process.uptime(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
+
+// Root health check for Render
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    message: 'Game Forum API is running',
+    health: '/api/health'
+  });
 });
 
 // Error handling middleware
