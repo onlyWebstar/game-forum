@@ -21,13 +21,13 @@ export const authService = {
 
   // Login user
   login: async (data: LoginData) => {
-    const response = await api.post('/login', data);
+    const response = await api.post('/auth/login', data);
     return response.data;
   },
 
   // Get current user
   getCurrentUser: async () => {
-    const response = await api.get('/me');
+    const response = await api.get('/auth/me');
     return response.data;
   },
 
