@@ -15,19 +15,19 @@ export interface RegisterData {
 export const authService = {
   // Register new user
   register: async (data: RegisterData) => {
-    const response = await api.post('/api/auth/register', data);
+    const response = await api.post('/auth/register', data);
     return response.data;
   },
 
   // Login user
   login: async (data: LoginData) => {
-    const response = await api.post('/api/login', data);
+    const response = await api.post('/login', data);
     return response.data;
   },
 
   // Get current user
   getCurrentUser: async () => {
-    const response = await api.get('/api/me');
+    const response = await api.get('/me');
     return response.data;
   },
 
