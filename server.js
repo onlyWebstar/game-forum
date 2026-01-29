@@ -30,8 +30,10 @@ app.use(cors({
       'http://localhost:8080',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:8080',
+      'https://game-forum-alpha.vercel.app/',
       process.env.FRONTEND_URL
     ].filter(Boolean);
+    credentials: true
     
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
