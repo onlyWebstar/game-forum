@@ -31,6 +31,7 @@ app.use(cors({
       'http://127.0.0.1:3000',
       'http://127.0.0.1:8080',
       'https://game-forum-alpha.vercel.app',
+      'https://game-forum-alpha.vercel.app/',
       process.env.FRONTEND_URL
     ].filter(Boolean);
     credentials: true
@@ -47,6 +48,13 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Add keep-alive headers
+app.use((req, res, next) => {
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Keep-Alive', 'timeout=120');
+  next();
+});
 
 // MongoDB Connection (connect first)
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/game-forum', {
@@ -86,7 +94,20 @@ app.use('/api/search', searchRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date() });
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date(),
+    uptime: process.uptime(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
+  });
+});
+
+// Root health check for Render
+app.get('/', (req, res) => {
+  res.status(200).json({ 
+    message: 'Game Forum API is running',
+    health: '/api/health'
+  });
 });
 
 // Error handling middleware
@@ -107,6 +128,21 @@ app.use((req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// Set timeout to 2 minutes for Render's free tier
+server.setTimeout(120000);
+
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  server.close(() => {
+    console.log('HTTP server closed');
+    mongoose.connection.close(false, () => {
+      console.log('MongoDB connection closed');
+      process.exit(0);
+    });
+  });
 });
