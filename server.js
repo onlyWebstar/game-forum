@@ -19,32 +19,16 @@ const searchRoutes = require('./routes/search');
 const app = express();
 
 // Middleware - Allow requests from any localhost port
+// Middleware - Clean and strict CORS configuration
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Allowed origins
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:8080',
-      'http://127.0.0.1:3000',
-      'http://127.0.0.1:8080',
-      'https://game-forum-alpha.vercel.app',
-      'https://game-forum-alpha.vercel.app/',
-      process.env.FRONTEND_URL
-    ].filter(Boolean);
-    credentials: true
-    
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    
-    callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:8080',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:8080',
+    'https://game-forum-alpha.vercel.app' // Your Vercel frontend
+  ],
+  credentials: true // <-- Now in the correct place
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
