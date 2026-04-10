@@ -13,7 +13,11 @@
     "seed": "node scripts/seed.js",
     "build": "echo 'No build step required for backend'"
   },
-  "keywords": ["gaming", "forum", "api"],
+  "keywords": [
+    "gaming",
+    "forum",
+    "api"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -31,7 +35,8 @@
     "passport": "^0.7.0",
     "passport-discord": "^0.1.4",
     "passport-google-oauth20": "^2.0.0",
-    "passport-jwt": "^4.0.1"
+    "passport-jwt": "^4.0.1",
+    "resend": "^6.9.4"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
