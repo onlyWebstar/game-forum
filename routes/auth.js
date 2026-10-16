@@ -64,7 +64,6 @@ router.post('/register', [
 
     res.status(201).json({
       success: true,
-      token,
       user: {
         id: user._id,
         username: user.username,
@@ -138,7 +137,10 @@ router.post('/login', [
         email: user.email,
         avatar: user.getAvatarUrl(),
         role: user.role,
-        bio: user.bio
+        bio: user.bio,
+        emailVerified: user.emailVerified,
+        level: user.level,
+        experience: user.experience
       }
     });
   } catch (error) {
@@ -163,6 +165,7 @@ router.get('/me', protect, async (req, res) => {
         avatar: user.getAvatarUrl(),
         bio: user.bio,
         role: user.role,
+        emailVerified: user.emailVerified,
         level: user.level,
         experience: user.experience,
         badges: user.badges,

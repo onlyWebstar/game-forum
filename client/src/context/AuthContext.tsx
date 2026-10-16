@@ -11,6 +11,10 @@ interface User {
   bio?: string;
   level?: number;
   experience?: number;
+  emailVerified?: boolean;
+  postsCount?: number;
+  commentsCount?: number;
+  likesReceived?: number;
   createdAt: string;
 }
 
@@ -23,6 +27,8 @@ interface AuthContextType {
   logout: () => void;
   loginWithGoogle: () => void;
   loginWithDiscord: () => void;
+  refreshUser: () => Promise<void>;
+  updateUser: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -111,13 +117,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       const response = await authService.register({ username, email, password });
       
-      if (response.success) {
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
-        setUser(response.user);
-      } else {
+      if (!response.success) {
         throw new Error(response.message || 'Registration failed');
       }
+      // Intentionally no token/user stored here: the user must verify
+      // their email first, then log in.
     } catch (error: any) {
       console.error('Registration error:', error);
       throw new Error(error.response?.data?.message || 'Registration failed');
@@ -130,6 +134,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
+  };
+
+  const refreshUser = async () => {
+    try {
+      const response = await authService.getCurrentUser();
+      if (response.success) {
+        setUser(response.user);
+      }
+    } catch (error) {
+      console.error('Failed to refresh user:', error);
+    }
+  };
+
+  const updateUser = (updates: Partial<User>) => {
+    setUser((prev) => (prev ? { ...prev, ...updates } : prev));
   };
 
   const loginWithGoogle = () => {
@@ -151,6 +170,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         logout,
         loginWithGoogle,
         loginWithDiscord,
+        refreshUser,
+        updateUser,
       }}
     >
       {children}

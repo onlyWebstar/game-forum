@@ -19,7 +19,7 @@ import { postsService } from '@/services/posts';
 import { gamesService } from '@/services/games';
 
 const CreatePost: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -38,6 +38,9 @@ const CreatePost: React.FC = () => {
 
   // Redirect if not logged in
   useEffect(() => {
+    // Wait for the stored session to be restored before deciding anything
+    if (isLoading) return;
+
     if (!isAuthenticated) {
       toast({
         title: 'Authentication Required',
@@ -48,8 +51,8 @@ const CreatePost: React.FC = () => {
       return;
     }
 
-    // Check email verification
-    if (user && !user.emailVerified) {
+    // Check email verification (only block when explicitly unverified)
+    if (user && user.emailVerified === false) {
       toast({
         title: 'Email Verification Required',
         description: 'Please verify your email before creating posts',
@@ -61,7 +64,7 @@ const CreatePost: React.FC = () => {
     
     // Fetch games for the dropdown
     fetchGames();
-  }, [isAuthenticated, user, navigate, toast]);
+  }, [isAuthenticated, isLoading, user, navigate, toast]);
 
   const fetchGames = async () => {
     setGamesLoading(true);

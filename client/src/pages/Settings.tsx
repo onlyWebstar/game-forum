@@ -1,7 +1,7 @@
 // pages/Settings.tsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Bell, Shield, Trash2, Eye, EyeOff, Save } from 'lucide-react';
+import { Lock, Bell, Shield, Trash2, Eye, EyeOff, Save, Mail, BadgeCheck, AlertCircle } from 'lucide-react';
 import Layout from '@/components/layout/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,22 +10,25 @@ import { useToast } from '@/hooks/use-toast';
 import api from '@/services/api';
 
 const Settings: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const [activeTab, setActiveTab] = useState<'password' | 'notifications' | 'privacy' | 'account'>('password');
 
-  if (!user) {
-    navigate('/login');
-    return null;
-  }
+  React.useEffect(() => {
+    if (!isLoading && !user) navigate('/login');
+  }, [isLoading, user, navigate]);
+
+  if (isLoading || !user) return null;
 
   return (
     <Layout>
       <div className="min-h-screen py-8">
         <div className="container mx-auto px-4 max-w-4xl">
-          <h1 className="font-display text-3xl font-bold mb-8">Settings</h1>
+          <h1 className="font-display text-3xl font-bold mb-6">Settings</h1>
+
+          <EmailStatusCard />
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             {/* Sidebar */}
@@ -90,6 +93,79 @@ const Settings: React.FC = () => {
         </div>
       </div>
     </Layout>
+  );
+};
+
+// Email Status Card (verified tick)
+const EmailStatusCard: React.FC = () => {
+  const { user, refreshUser } = useAuth();
+  const { toast } = useToast();
+  const [sending, setSending] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  if (!user) return null;
+
+  const verified = !!user.emailVerified;
+
+  const handleResend = async () => {
+    setSending(true);
+    try {
+      await api.post('/auth/resend-verification');
+      toast({
+        title: 'Email sent',
+        description: `A new verification link was sent to ${user.email}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Could not send verification email',
+        variant: 'destructive',
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setChecking(true);
+    await refreshUser();
+    setChecking(false);
+  };
+
+  return (
+    <div
+      className={`glass-card p-5 rounded-lg mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border ${
+        verified ? 'border-green-500/30' : 'border-yellow-500/30'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        {verified ? (
+          <BadgeCheck className="w-8 h-8 text-green-500 shrink-0" />
+        ) : (
+          <AlertCircle className="w-8 h-8 text-yellow-500 shrink-0" />
+        )}
+        <div>
+          <div className="flex items-center gap-2">
+            <Mail className="w-4 h-4 text-muted-foreground" />
+            <span className="font-medium break-all">{user.email}</span>
+          </div>
+          <p className={`text-sm ${verified ? 'text-green-500' : 'text-yellow-500'}`}>
+            {verified ? 'Email verified ✓' : 'Email not verified'}
+          </p>
+        </div>
+      </div>
+
+      {!verified && (
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={checking}>
+            {checking ? 'Checking...' : "I've verified"}
+          </Button>
+          <Button size="sm" onClick={handleResend} disabled={sending}>
+            {sending ? 'Sending...' : 'Resend link'}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 };
 

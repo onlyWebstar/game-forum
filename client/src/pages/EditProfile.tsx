@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import api from '@/services/api';
 
 const EditProfile: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -103,23 +103,15 @@ const EditProfile: React.FC = () => {
       });
 
       if (response.data.success) {
-        // Update local storage
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          const updatedUser = {
-            ...JSON.parse(storedUser),
-            ...response.data.user,
-          };
-          localStorage.setItem('user', JSON.stringify(updatedUser));
-        }
+        // Update the shared auth state so navbar, profile, etc. refresh instantly
+        updateUser(response.data.user);
 
         toast({
           title: 'Success',
           description: 'Profile updated successfully',
         });
 
-        // Refresh page to update context
-        window.location.reload();
+        navigate(`/profile/${response.data.user.username}`);
       }
     } catch (error: any) {
       toast({
@@ -136,10 +128,11 @@ const EditProfile: React.FC = () => {
     navigate(`/profile/${user?.username}`);
   };
 
-  if (!user) {
-    navigate('/login');
-    return null;
-  }
+  useEffect(() => {
+    if (!isLoading && !user) navigate('/login');
+  }, [isLoading, user, navigate]);
+
+  if (isLoading || !user) return null;
 
   return (
     <Layout>

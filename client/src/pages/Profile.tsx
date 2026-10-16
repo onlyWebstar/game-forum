@@ -1,79 +1,192 @@
+// pages/Profile.tsx
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Calendar, MapPin, Link as LinkIcon, Settings } from 'lucide-react';
+import { Link, useParams } from 'react-router-dom';
+import {
+  Calendar,
+  Settings,
+  MessageSquare,
+  ThumbsUp,
+  FileText,
+  Trophy,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Layout from '@/components/layout/Layout';
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 
-const Profile = () => {
-  const { username } = useParams(); // Get username from URL
-  const { user: currentUser } = useAuth(); // Get logged in user
-  const [profileData, setProfileData] = useState<any>(null);
+const Profile: React.FC = () => {
+  const { username } = useParams();
+  const { user: currentUser } = useAuth();
+
+  const [profile, setProfile] = useState<any>(null);
+  const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    if (!username) return;
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setNotFound(false);
       try {
-        // If viewing own profile, use current user data
-        // Otherwise, fetch from public profile API (which you need to ensure exists in backend)
-        // For now, let's assume we fetch by username
-        const { data } = await api.get(`/users/${username}`);
-        setProfileData(data.user);
+        const [profileRes, postsRes] = await Promise.all([
+          api.get(`/users/${username}`),
+          api.get(`/users/${username}/posts?limit=10`),
+        ]);
+        if (cancelled) return;
+        setProfile(profileRes.data.user);
+        setPosts(postsRes.data.posts || []);
       } catch (error) {
-        console.error("Failed to fetch profile", error);
+        console.error('Failed to fetch profile', error);
+        if (!cancelled) setNotFound(true);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    if (username) fetchProfile();
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, [username]);
 
-  if (loading) return <Layout><div className="p-20 text-center">Loading Profile...</div></Layout>;
-  if (!profileData) return <Layout><div className="p-20 text-center">User not found</div></Layout>;
+  if (loading) {
+    return (
+      <Layout>
+        <div className="p-20 text-center text-muted-foreground">Loading profile...</div>
+      </Layout>
+    );
+  }
 
-  const isOwnProfile = currentUser?.username === profileData.username;
+  if (notFound || !profile) {
+    return (
+      <Layout>
+        <div className="p-20 text-center">
+          <h1 className="font-display text-2xl font-bold mb-2">User not found</h1>
+          <p className="text-muted-foreground">
+            There is no active user called "{username}".
+          </p>
+        </div>
+      </Layout>
+    );
+  }
+
+  const isOwnProfile = currentUser?.username === profile.username;
+  const avatar =
+    profile.avatar ||
+    `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${encodeURIComponent(profile.username)}`;
+
+  const stats = [
+    { label: 'Level', value: profile.level || 1, icon: Trophy },
+    { label: 'Posts', value: profile.postsCount || 0, icon: FileText },
+    { label: 'Comments', value: profile.commentsCount || 0, icon: MessageSquare },
+    { label: 'Likes received', value: profile.likesReceived || 0, icon: ThumbsUp },
+  ];
 
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-          {/* User Info Card */}
+          {/* Left column: user card */}
           <div className="lg:col-span-1 space-y-6">
             <div className="glass-card p-6 text-center">
               <div className="w-32 h-32 mx-auto mb-4 rounded-full overflow-hidden border-4 border-background ring-2 ring-primary/20">
-                <img src={profileData.avatar} alt={profileData.username} className="w-full h-full object-cover" />
+                <img
+                  src={avatar}
+                  alt={profile.username}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${encodeURIComponent(profile.username)}`;
+                  }}
+                />
               </div>
-              <h1 className="font-display text-2xl font-bold mb-1">{profileData.username}</h1>
-              <p className="text-primary font-medium mb-4 capitalize">{profileData.role}</p>
-              
-              {/* Only show Settings/Edit if it is YOUR profile */}
+              <h1 className="font-display text-2xl font-bold mb-1">{profile.username}</h1>
+              <p className="text-primary font-medium mb-4 capitalize">{profile.role}</p>
+
               {isOwnProfile && (
-                <Button variant="outline" className="w-full gap-2" onClick={() => alert("Settings Modal implementation coming next!")}>
-                  <Settings className="w-4 h-4" /> Edit Profile
-                </Button>
+                <Link to="/profile/edit">
+                  <Button variant="outline" className="w-full gap-2">
+                    <Settings className="w-4 h-4" /> Edit Profile
+                  </Button>
+                </Link>
               )}
             </div>
 
             <div className="glass-card p-6 space-y-4">
               <div className="flex items-center gap-3 text-muted-foreground">
                 <Calendar className="w-4 h-4" />
-                <span>Joined {new Date(profileData.createdAt).toLocaleDateString()}</span>
+                <span>Joined {new Date(profile.createdAt).toLocaleDateString()}</span>
               </div>
-              {profileData.bio && (
-                 <p className="text-sm text-muted-foreground pt-4 border-t border-border">
-                   {profileData.bio}
-                 </p>
-              )}
+              <div className="text-sm text-muted-foreground pt-4 border-t border-border">
+                {profile.bio ? (
+                  profile.bio
+                ) : isOwnProfile ? (
+                  <Link to="/profile/edit" className="text-primary hover:underline">
+                    Add a bio
+                  </Link>
+                ) : (
+                  'No bio yet.'
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Activity Feed Area */}
-          <div className="lg:col-span-3">
-             <div className="glass-card p-8 text-center text-muted-foreground">
-                {profileData.username} hasn't posted anything yet.
-             </div>
+          {/* Right column: stats + posts */}
+          <div className="lg:col-span-3 space-y-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              {stats.map(({ label, value, icon: Icon }) => (
+                <div key={label} className="glass-card p-4 text-center">
+                  <Icon className="w-5 h-5 text-primary mx-auto mb-2" />
+                  <div className="text-2xl font-bold">{value}</div>
+                  <div className="text-xs text-muted-foreground">{label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="glass-card p-6">
+              <h2 className="font-display text-xl font-bold mb-4">Recent Posts</h2>
+
+              {posts.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">
+                  {isOwnProfile
+                    ? "You haven't posted anything yet."
+                    : `${profile.username} hasn't posted anything yet.`}
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {posts.map((post) => (
+                    <Link
+                      key={post._id}
+                      to={`/forum/${post._id}`}
+                      className="block p-4 rounded-lg border border-border hover:border-primary/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 mb-1 text-xs">
+                        <span className="px-2 py-0.5 rounded bg-primary/20 text-primary capitalize">
+                          {post.postType}
+                        </span>
+                        {post.game?.title && (
+                          <span className="text-muted-foreground">in {post.game.title}</span>
+                        )}
+                        <span className="text-muted-foreground ml-auto">
+                          {new Date(post.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <h3 className="font-semibold">{post.title}</h3>
+                      <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <ThumbsUp className="w-4 h-4" /> {post.likesCount || 0}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <MessageSquare className="w-4 h-4" /> {post.commentsCount || 0}
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
