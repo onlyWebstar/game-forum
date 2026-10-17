@@ -15,20 +15,34 @@ const commentRoutes = require('./routes/comments');
 const likeRoutes = require('./routes/likes');
 const userRoutes = require('./routes/users');
 const searchRoutes = require('./routes/search');
+const statsRoutes = require('./routes/stats');
 
 const app = express();
 
 // Middleware - Allow requests from any localhost port
-// Middleware - Clean and strict CORS configuration
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:8080',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:8080',
-    'https://game-forum-alpha.vercel.app' // Your Vercel frontend
-  ],
-  credentials: true // <-- Now in the correct place
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allowed origins
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'http://localhost:8080',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:8080',
+      process.env.FRONTEND_URL
+    ].filter(Boolean);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -75,6 +89,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/likes', likeRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

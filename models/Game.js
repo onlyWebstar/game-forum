@@ -93,20 +93,22 @@ const gameSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Generate slug from title
-gameSchema.pre('save', function(next) {
-  if (this.isModified('title')) {
-    this.slug = this.title
+// Generate slug from title.
+// IMPORTANT: this must be a 'validate' hook, not 'save'. Mongoose checks
+// required fields BEFORE pre('save') hooks run, so a save hook is too late.
+gameSchema.pre('validate', function(next) {
+  if (this.title && (this.isModified('title') || !this.slug)) {
+    const base = this.title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
+    this.slug = base || `game-${Date.now()}`;
   }
   next();
 });
 
 // Indexes
 gameSchema.index({ title: 'text', description: 'text' });
-gameSchema.index({ slug: 1 });
 gameSchema.index({ genres: 1 });
 gameSchema.index({ platforms: 1 });
 gameSchema.index({ releaseDate: -1 });
