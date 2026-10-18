@@ -35,9 +35,13 @@ router.get('/', async (req, res) => {
     if (featured === 'true') query.isFeatured = true;
     if (pinned === 'true') query.isPinned = true;
 
-    // Search
-    if (search) {
-      query.$text = { $search: search };
+    // Search (partial, case-insensitive; special characters escaped)
+    if (search && search.trim()) {
+      const safe = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.$or = [
+        { title: { $regex: safe, $options: 'i' } },
+        { content: { $regex: safe, $options: 'i' } }
+      ];
     }
 
     // Sort
@@ -91,7 +95,7 @@ router.get('/', async (req, res) => {
 router.get('/:id', async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
-      .populate('author', 'username avatar role level badges')
+      .populate('author', 'username avatar role level badges postsCount createdAt')
       .populate('game', 'title coverImage slug developer platforms');
 
     if (!post || post.isDeleted) {
@@ -150,6 +154,7 @@ router.post('/', [
       images: images || [],
       author: req.user._id
     });
+
     // Update game and user stats
     await Promise.all([
       Game.findByIdAndUpdate(game, { $inc: { postsCount: 1 } }),
@@ -299,6 +304,7 @@ router.put('/:id/lock', [protect, authorize('moderator', 'admin')], async (req, 
 
     post.isLocked = !post.isLocked;
     await post.save();
+
     res.json({
       success: true,
       post,

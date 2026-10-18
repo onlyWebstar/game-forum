@@ -1,18 +1,21 @@
-import React, { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { 
-  ThumbsUp, 
-  ThumbsDown, 
-  MessageSquare, 
-  Clock, 
-  Share2, 
-  Bookmark, 
-  Flag,
+// pages/PostDetail.tsx
+import React, { useCallback, useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import {
+  ThumbsUp,
+  ThumbsDown,
+  MessageSquare,
+  Clock,
+  Share2,
   ChevronLeft,
   MoreHorizontal,
   Reply,
   Eye,
-  Send
+  Send,
+  Pin,
+  Lock,
+  Trash2,
+  Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -26,340 +29,219 @@ import {
 import Layout from '@/components/layout/Layout';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import api from '@/services/api';
+import { timeAgo } from '@/lib/time';
 
-// Mock post data
-const mockPost = {
-  id: '1',
-  title: 'Best builds for new Elden Ring DLC? Share your experiences!',
-  content: `
-## Introduction
+const MAX_REPLY_DEPTH = 5; // the backend rejects replies deeper than this
 
-Hey fellow Tarnished! 🎮
+/* ---------- tree helpers ---------- */
+const updateNode = (nodes: any[], id: string, fn: (c: any) => any): any[] =>
+  nodes.map((n) =>
+    n._id === id
+      ? fn(n)
+      : n.replies?.length
+      ? { ...n, replies: updateNode(n.replies, id, fn) }
+      : n
+  );
 
-I've been playing the new Shadow of the Erdtree DLC for about 30 hours now, and I'm absolutely blown away by the new areas, bosses, and weapons.
+const collectIds = (nodes: any[]): string[] =>
+  nodes.flatMap((n) => [n._id, ...collectIds(n.replies || [])]);
 
-But I'm curious - what builds have you all been running? I've been trying a few different approaches and wanted to share my experiences.
-
-## My Current Build
-
-I've been running a **Dex/Faith hybrid** build focusing on the new incantations. Here's my setup:
-
-- **Level:** 180
-- **Vigor:** 60
-- **Mind:** 30
-- **Endurance:** 25
-- **Strength:** 20
-- **Dexterity:** 50
-- **Intelligence:** 10
-- **Faith:** 45
-- **Arcane:** 10
-
-### Weapons
-1. **New DLC Katana** - Amazing scaling and weapon art
-2. **Erdtree Seal** - For casting incantations
-3. **Buckler** - For parrying those new tough enemies
-
-## What I've Found Works
-
-The new incantations are incredibly powerful if you have the stats for them. The fire-based ones especially seem to melt through a lot of the new enemies.
-
-For boss fights, I've found that patience is key. The new bosses have much longer combo strings than anything in the base game.
-
-## Questions for the Community
-
-1. What level are you going into the DLC?
-2. Has anyone tried a pure sorcery build? How does it compare?
-3. Which new weapon has been your favorite so far?
-
-Looking forward to hearing your thoughts! Let's discuss strategies and help each other out.
-
-*May grace guide you!* ⚔️
-  `,
-  author: {
-    id: '1',
-    username: 'ShadowBlade99',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=ShadowBlade99',
-    role: 'Veteran Gamer',
-    joinDate: 'Jan 2022',
-    posts: 342,
-  },
-  game: {
-    id: '1',
-    name: 'Elden Ring',
-    cover: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=100&h=100&fit=crop',
-  },
-  category: 'discussions',
-  likes: 342,
-  dislikes: 12,
-  comments: 89,
-  views: 2341,
-  createdAt: '2024-01-15T10:30:00Z',
-  isPinned: true,
-  tags: ['DLC', 'Builds', 'Strategy', 'Discussion'],
-};
-
-// Mock comments data with nested replies
-const mockComments = [
-  {
-    id: '1',
-    author: {
-      username: 'DragonSlayer2024',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DragonSlayer2024',
-      role: 'Pro Gamer',
-    },
-    content: 'Great guide! I\'ve been running a pure strength build with the new colossal weapons. The damage is insane but you really need to learn the timing. The new bosses punish greedy attacks hard.',
-    likes: 45,
-    dislikes: 2,
-    createdAt: '2024-01-15T11:00:00Z',
-    replies: [
-      {
-        id: '1-1',
-        author: {
-          username: 'ShadowBlade99',
-          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=ShadowBlade99',
-          role: 'Veteran Gamer',
-        },
-        content: 'Totally agree about the timing! Which colossal weapon have you been using? I tried the new greathammer but couldn\'t get the hang of it.',
-        likes: 12,
-        dislikes: 0,
-        createdAt: '2024-01-15T11:15:00Z',
-        replies: [
-          {
-            id: '1-1-1',
-            author: {
-              username: 'DragonSlayer2024',
-              avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=DragonSlayer2024',
-              role: 'Pro Gamer',
-            },
-            content: 'The new great axe! The weapon art is absolutely broken once you get the spacing right. Try it out!',
-            likes: 8,
-            dislikes: 0,
-            createdAt: '2024-01-15T11:30:00Z',
-            replies: [],
-          },
-        ],
-      },
-    ],
-  },
-  {
-    id: '2',
-    author: {
-      username: 'MageSorcerer',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=MageSorcerer',
-      role: 'Spellcaster',
-    },
-    content: 'Pure sorcery build here! It\'s actually really viable in the DLC. The new staffs have amazing scaling and there are some new spells that absolutely destroy bosses. Though I will say, the FP costs are quite high so you need a lot of Mind.',
-    likes: 67,
-    dislikes: 3,
-    createdAt: '2024-01-15T12:00:00Z',
-    replies: [
-      {
-        id: '2-1',
-        author: {
-          username: 'NewTarnished',
-          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=NewTarnished',
-          role: 'Newcomer',
-        },
-        content: 'What level of Mind do you recommend? I\'m at 25 and running out constantly.',
-        likes: 5,
-        dislikes: 0,
-        createdAt: '2024-01-15T12:30:00Z',
-        replies: [],
-      },
-    ],
-  },
-  {
-    id: '3',
-    author: {
-      username: 'LoreMaster42',
-      avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=LoreMaster42',
-      role: 'Lore Expert',
-    },
-    content: 'Has anyone else noticed the lore implications of the new area? Without spoilers, the connections to Marika\'s past are fascinating. The item descriptions are wild!',
-    likes: 89,
-    dislikes: 1,
-    createdAt: '2024-01-15T14:00:00Z',
-    replies: [],
-  },
-];
-
-interface Comment {
-  id: string;
-  author: {
-    username: string;
-    avatar: string;
-    role: string;
-  };
-  content: string;
-  likes: number;
-  dislikes: number;
-  createdAt: string;
-  replies: Comment[];
-}
-
+/* ---------- a single comment (recursive) ---------- */
 interface CommentItemProps {
-  comment: Comment;
+  comment: any;
   depth?: number;
+  currentUser: any;
+  votes: Record<string, number>;
+  locked: boolean;
+  onVote: (id: string, value: 1 | -1) => void;
+  onReply: (parentId: string, content: string) => Promise<boolean>;
+  onEdit: (id: string, content: string) => Promise<boolean>;
+  onDelete: (id: string) => void;
 }
 
-const CommentItem: React.FC<CommentItemProps> = ({ comment, depth = 0 }) => {
-  const [showReplyForm, setShowReplyForm] = useState(false);
-  const [replyContent, setReplyContent] = useState('');
-  const [liked, setLiked] = useState(false);
-  const [disliked, setDisliked] = useState(false);
-  const [likes, setLikes] = useState(comment.likes);
-  const [dislikes, setDislikes] = useState(comment.dislikes);
-  const { isAuthenticated } = useAuth();
-  const { toast } = useToast();
+const CommentItem: React.FC<CommentItemProps> = ({
+  comment,
+  depth = 0,
+  currentUser,
+  votes,
+  locked,
+  onVote,
+  onReply,
+  onEdit,
+  onDelete,
+}) => {
+  const [showReply, setShowReply] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [editText, setEditText] = useState(comment.content);
+  const [busy, setBusy] = useState(false);
 
-  const handleLike = () => {
-    if (!isAuthenticated) {
-      toast({ title: 'Please login to like comments', variant: 'destructive' });
-      return;
-    }
-    if (liked) {
-      setLikes(likes - 1);
-      setLiked(false);
-    } else {
-      setLikes(likes + 1);
-      setLiked(true);
-      if (disliked) {
-        setDislikes(dislikes - 1);
-        setDisliked(false);
-      }
-    }
-  };
+  const author = comment.author || {};
+  const isOwner = !!currentUser && author._id === currentUser.id;
+  const isMod = !!currentUser && ['admin', 'moderator'].includes(currentUser.role);
+  const myVote = votes[comment._id] || 0;
+  const canReply = !locked && !!currentUser && (comment.depth ?? depth) < MAX_REPLY_DEPTH;
 
-  const handleDislike = () => {
-    if (!isAuthenticated) {
-      toast({ title: 'Please login to dislike comments', variant: 'destructive' });
-      return;
-    }
-    if (disliked) {
-      setDislikes(dislikes - 1);
-      setDisliked(false);
-    } else {
-      setDislikes(dislikes + 1);
-      setDisliked(true);
-      if (liked) {
-        setLikes(likes - 1);
-        setLiked(false);
-      }
+  // Indent only the first few levels so deep threads don't get squeezed
+  const indented = depth > 0 && depth <= 3;
+
+  const submitReply = async () => {
+    if (!replyText.trim()) return;
+    setBusy(true);
+    const ok = await onReply(comment._id, replyText.trim());
+    setBusy(false);
+    if (ok) {
+      setReplyText('');
+      setShowReply(false);
     }
   };
 
-  const handleReply = () => {
-    if (!isAuthenticated) {
-      toast({ title: 'Please login to reply', variant: 'destructive' });
-      return;
-    }
-    if (!replyContent.trim()) return;
-    toast({ title: 'Reply posted!', description: 'Your reply has been added.' });
-    setReplyContent('');
-    setShowReplyForm(false);
+  const submitEdit = async () => {
+    if (!editText.trim()) return;
+    setBusy(true);
+    const ok = await onEdit(comment._id, editText.trim());
+    setBusy(false);
+    if (ok) setEditing(false);
   };
-
-  const timeAgo = (date: string) => {
-    const now = new Date();
-    const past = new Date(date);
-    const diffMs = now.getTime() - past.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    if (diffHours < 1) return 'Just now';
-    if (diffHours < 24) return `${diffHours}h ago`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
-  };
-
-  const maxDepth = 3;
-  const isMaxDepth = depth >= maxDepth;
 
   return (
-    <div className={`${depth > 0 ? 'ml-4 sm:ml-8 pl-4 border-l-2 border-border' : ''}`}>
+    <div className={indented ? 'ml-3 sm:ml-6 pl-3 sm:pl-4 border-l-2 border-border' : ''}>
       <div className="py-4">
         <div className="flex items-start gap-3">
           <Avatar className="w-8 h-8 sm:w-10 sm:h-10 shrink-0">
-            <AvatarImage src={comment.author.avatar} alt={comment.author.username} />
-            <AvatarFallback>{comment.author.username[0]}</AvatarFallback>
+            <AvatarImage src={author.avatar} alt={author.username} />
+            <AvatarFallback>{(author.username || '?')[0]}</AvatarFallback>
           </Avatar>
+
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <Link 
-                to={`/profile/${comment.author.username}`}
+              <Link
+                to={`/profile/${author.username}`}
                 className="font-semibold text-foreground hover:text-primary transition-colors"
               >
-                {comment.author.username}
+                {author.username || 'Deleted user'}
               </Link>
-              <span className="text-xs px-2 py-0.5 bg-primary/20 text-primary rounded-full">
-                {comment.author.role}
-              </span>
+              {['admin', 'moderator'].includes(author.role) && (
+                <span className="text-xs px-2 py-0.5 bg-primary/20 text-primary rounded-full capitalize">
+                  {author.role}
+                </span>
+              )}
               <span className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="w-3 h-3" />
                 {timeAgo(comment.createdAt)}
+                {comment.isEdited && ' (edited)'}
               </span>
             </div>
-            <p className="mt-2 text-foreground/90 text-sm sm:text-base leading-relaxed">
-              {comment.content}
-            </p>
+
+            {editing ? (
+              <div className="mt-2 space-y-2">
+                <Textarea
+                  value={editText}
+                  onChange={(e) => setEditText(e.target.value)}
+                  className="min-h-[80px] resize-none"
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={submitEdit} disabled={busy || !editText.trim()}>
+                    Save
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setEditing(false);
+                      setEditText(comment.content);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-2 text-foreground/90 text-sm sm:text-base leading-relaxed whitespace-pre-wrap break-words">
+                {comment.content}
+              </p>
+            )}
+
             <div className="flex items-center gap-4 mt-3">
-              <button 
-                onClick={handleLike}
+              <button
+                onClick={() => onVote(comment._id, 1)}
                 className={`flex items-center gap-1 text-sm transition-colors ${
-                  liked ? 'text-success' : 'text-muted-foreground hover:text-success'
+                  myVote === 1 ? 'text-success' : 'text-muted-foreground hover:text-success'
                 }`}
               >
                 <ThumbsUp className="w-4 h-4" />
-                <span>{likes}</span>
+                <span>{comment.likesCount || 0}</span>
               </button>
-              <button 
-                onClick={handleDislike}
+              <button
+                onClick={() => onVote(comment._id, -1)}
                 className={`flex items-center gap-1 text-sm transition-colors ${
-                  disliked ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'
+                  myVote === -1
+                    ? 'text-destructive'
+                    : 'text-muted-foreground hover:text-destructive'
                 }`}
               >
                 <ThumbsDown className="w-4 h-4" />
-                <span>{dislikes}</span>
+                <span>{comment.dislikesCount || 0}</span>
               </button>
-              {!isMaxDepth && (
-                <button 
-                  onClick={() => setShowReplyForm(!showReplyForm)}
+
+              {canReply && (
+                <button
+                  onClick={() => setShowReply(!showReply)}
                   className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
                 >
                   <Reply className="w-4 h-4" />
                   Reply
                 </button>
               )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="text-muted-foreground hover:text-foreground transition-colors">
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem>
-                    <Flag className="w-4 h-4 mr-2" />
-                    Report
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+
+              {(isOwner || isMod) && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="text-muted-foreground hover:text-foreground transition-colors">
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {isOwner && (
+                      <DropdownMenuItem onClick={() => setEditing(true)}>
+                        <Pencil className="w-4 h-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem
+                      onClick={() => onDelete(comment._id)}
+                      className="text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </div>
 
-            {/* Reply Form */}
-            {showReplyForm && (
+            {showReply && (
               <div className="mt-4 flex gap-2">
                 <Textarea
                   placeholder="Write a reply..."
-                  value={replyContent}
-                  onChange={(e) => setReplyContent(e.target.value)}
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
                   className="flex-1 min-h-[80px] resize-none"
                 />
                 <div className="flex flex-col gap-2">
-                  <Button size="sm" onClick={handleReply} className="shrink-0">
+                  <Button
+                    size="sm"
+                    onClick={submitReply}
+                    disabled={busy || !replyText.trim()}
+                    className="shrink-0"
+                  >
                     <Send className="w-4 h-4" />
                   </Button>
-                  <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    onClick={() => setShowReplyForm(false)}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowReply(false)}
                     className="shrink-0"
                   >
                     Cancel
@@ -371,11 +253,21 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, depth = 0 }) => {
         </div>
       </div>
 
-      {/* Nested Replies */}
-      {comment.replies.length > 0 && (
+      {comment.replies?.length > 0 && (
         <div>
-          {comment.replies.map((reply) => (
-            <CommentItem key={reply.id} comment={reply} depth={depth + 1} />
+          {comment.replies.map((reply: any) => (
+            <CommentItem
+              key={reply._id}
+              comment={reply}
+              depth={depth + 1}
+              currentUser={currentUser}
+              votes={votes}
+              locked={locked}
+              onVote={onVote}
+              onReply={onReply}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
           ))}
         </div>
       )}
@@ -383,63 +275,240 @@ const CommentItem: React.FC<CommentItemProps> = ({ comment, depth = 0 }) => {
   );
 };
 
+/* ---------- the page ---------- */
 const PostDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const [liked, setLiked] = useState(false);
-  const [disliked, setDisliked] = useState(false);
-  const [likes, setLikes] = useState(mockPost.likes);
-  const [dislikes, setDislikes] = useState(mockPost.dislikes);
-  const [bookmarked, setBookmarked] = useState(false);
-  const [newComment, setNewComment] = useState('');
-  const { isAuthenticated, user } = useAuth();
+  const navigate = useNavigate();
+  const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
 
-  const handleLike = () => {
-    if (!isAuthenticated) {
-      toast({ title: 'Please login to like posts', variant: 'destructive' });
-      return;
-    }
-    if (liked) {
-      setLikes(likes - 1);
-      setLiked(false);
-    } else {
-      setLikes(likes + 1);
-      setLiked(true);
-      if (disliked) {
-        setDislikes(dislikes - 1);
-        setDisliked(false);
-      }
-    }
-  };
+  const [post, setPost] = useState<any>(null);
+  const [comments, setComments] = useState<any[]>([]);
+  const [totalComments, setTotalComments] = useState(0);
+  const [related, setRelated] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
-  const handleDislike = () => {
-    if (!isAuthenticated) {
-      toast({ title: 'Please login to dislike posts', variant: 'destructive' });
-      return;
-    }
-    if (disliked) {
-      setDislikes(dislikes - 1);
-      setDisliked(false);
-    } else {
-      setDislikes(dislikes + 1);
-      setDisliked(true);
-      if (liked) {
-        setLikes(likes - 1);
-        setLiked(false);
-      }
-    }
-  };
+  const [postVote, setPostVote] = useState(0);
+  const [commentVotes, setCommentVotes] = useState<Record<string, number>>({});
+  const [newComment, setNewComment] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleBookmark = () => {
-    if (!isAuthenticated) {
-      toast({ title: 'Please login to bookmark posts', variant: 'destructive' });
-      return;
-    }
-    setBookmarked(!bookmarked);
-    toast({ 
-      title: bookmarked ? 'Removed from bookmarks' : 'Added to bookmarks',
-      description: bookmarked ? 'Post removed from your saved list.' : 'You can find this post in your profile.',
+  const isMod = !!user && ['admin', 'moderator'].includes(user.role);
+  const isPostOwner = !!user && post?.author?._id === user.id;
+
+  const showError = (error: any, fallback: string) =>
+    toast({
+      title: 'Error',
+      description: error?.response?.data?.message || fallback,
+      variant: 'destructive',
     });
+
+  const requireLogin = (action: string) => {
+    if (!isAuthenticated) {
+      toast({ title: `Please log in to ${action}`, variant: 'destructive' });
+      return false;
+    }
+    return true;
+  };
+
+  /* ----- load the post ----- */
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+
+    const load = async () => {
+      setLoading(true);
+      setNotFound(false);
+      try {
+        const { data } = await api.get(`/posts/${id}`);
+        if (cancelled) return;
+        setPost(data.post);
+
+        // Other discussions about the same game
+        if (data.post.game?._id) {
+          api
+            .get('/posts', { params: { game: data.post.game._id, limit: 6 } })
+            .then((res) => {
+              if (cancelled) return;
+              setRelated(
+                (res.data.posts || []).filter((p: any) => p._id !== data.post._id).slice(0, 4)
+              );
+            })
+            .catch(() => {});
+        }
+      } catch (error) {
+        console.error('Failed to load post', error);
+        if (!cancelled) setNotFound(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  /* ----- load comments (+ my votes on them) ----- */
+  const loadComments = useCallback(async () => {
+    if (!id) return;
+    try {
+      const { data } = await api.get(`/comments/${id}/tree`);
+      const tree = data.comments || [];
+      setComments(tree);
+      setTotalComments(data.total || 0);
+
+      if (isAuthenticated) {
+        const ids = collectIds(tree);
+        if (ids.length > 0) {
+          const res = await api.get('/likes/check', {
+            params: { targetIds: ids.join(','), targetType: 'Comment' },
+          });
+          setCommentVotes(res.data.likes || {});
+        } else {
+          setCommentVotes({});
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load comments', error);
+    }
+  }, [id, isAuthenticated]);
+
+  useEffect(() => {
+    loadComments();
+  }, [loadComments]);
+
+  /* ----- my vote on the post ----- */
+  useEffect(() => {
+    if (!id || !isAuthenticated) {
+      setPostVote(0);
+      return;
+    }
+    api
+      .get('/likes/check', { params: { targetIds: id, targetType: 'Post' } })
+      .then((res) => setPostVote(res.data.likes?.[id] || 0))
+      .catch(() => {});
+  }, [id, isAuthenticated]);
+
+  /* ----- actions ----- */
+  const votePost = async (value: 1 | -1) => {
+    if (!requireLogin('vote on posts') || !post) return;
+    try {
+      const { data } = await api.post('/likes', {
+        targetType: 'Post',
+        targetId: post._id,
+        value,
+      });
+      setPost((p: any) => ({
+        ...p,
+        likesCount: data.data.likesCount,
+        dislikesCount: data.data.dislikesCount,
+      }));
+      setPostVote(data.data.userLikeValue || 0);
+    } catch (error) {
+      showError(error, 'Could not save your vote');
+    }
+  };
+
+  const voteComment = async (commentId: string, value: 1 | -1) => {
+    if (!requireLogin('vote on comments')) return;
+    try {
+      const { data } = await api.post('/likes', {
+        targetType: 'Comment',
+        targetId: commentId,
+        value,
+      });
+      setComments((tree) =>
+        updateNode(tree, commentId, (c) => ({
+          ...c,
+          likesCount: data.data.likesCount,
+          dislikesCount: data.data.dislikesCount,
+        }))
+      );
+      setCommentVotes((v) => ({ ...v, [commentId]: data.data.userLikeValue || 0 }));
+    } catch (error) {
+      showError(error, 'Could not save your vote');
+    }
+  };
+
+  const postComment = async (content: string, parentCommentId?: string): Promise<boolean> => {
+    if (!requireLogin('comment') || !post) return false;
+    try {
+      await api.post('/comments', {
+        content,
+        postId: post._id,
+        ...(parentCommentId && { parentCommentId }),
+      });
+      await loadComments();
+      return true;
+    } catch (error) {
+      showError(error, 'Could not post your comment');
+      return false;
+    }
+  };
+
+  const submitTopLevelComment = async () => {
+    if (!newComment.trim()) return;
+    setSubmitting(true);
+    const ok = await postComment(newComment.trim());
+    setSubmitting(false);
+    if (ok) setNewComment('');
+  };
+
+  const editComment = async (commentId: string, content: string): Promise<boolean> => {
+    try {
+      const { data } = await api.put(`/comments/${commentId}`, { content });
+      setComments((tree) =>
+        updateNode(tree, commentId, (c) => ({
+          ...c,
+          content: data.comment.content,
+          isEdited: true,
+        }))
+      );
+      return true;
+    } catch (error) {
+      showError(error, 'Could not edit your comment');
+      return false;
+    }
+  };
+
+  const deleteComment = async (commentId: string) => {
+    if (!confirm('Delete this comment?')) return;
+    try {
+      await api.delete(`/comments/${commentId}`);
+      toast({ title: 'Comment deleted' });
+      await loadComments();
+    } catch (error) {
+      showError(error, 'Could not delete the comment');
+    }
+  };
+
+  const deletePost = async () => {
+    if (!post || !confirm('Delete this post? This cannot be undone.')) return;
+    try {
+      await api.delete(`/posts/${post._id}`);
+      toast({ title: 'Post deleted' });
+      navigate('/forum');
+    } catch (error) {
+      showError(error, 'Could not delete the post');
+    }
+  };
+
+  const toggleFlag = async (flag: 'pin' | 'lock') => {
+    if (!post) return;
+    try {
+      const { data } = await api.put(`/posts/${post._id}/${flag}`);
+      setPost((p: any) => ({
+        ...p,
+        isPinned: data.post.isPinned,
+        isLocked: data.post.isLocked,
+      }));
+      toast({ title: data.message });
+    } catch (error) {
+      showError(error, `Could not ${flag} the post`);
+    }
   };
 
   const handleShare = () => {
@@ -447,33 +516,40 @@ const PostDetail: React.FC = () => {
     toast({ title: 'Link copied!', description: 'Post link copied to clipboard.' });
   };
 
-  const handleSubmitComment = () => {
-    if (!isAuthenticated) {
-      toast({ title: 'Please login to comment', variant: 'destructive' });
-      return;
-    }
-    if (!newComment.trim()) return;
-    toast({ title: 'Comment posted!', description: 'Your comment has been added to the discussion.' });
-    setNewComment('');
-  };
+  /* ----- render ----- */
+  if (loading) {
+    return (
+      <Layout>
+        <div className="min-h-[60vh] flex items-center justify-center text-muted-foreground">
+          Loading post...
+        </div>
+      </Layout>
+    );
+  }
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  if (notFound || !post) {
+    return (
+      <Layout>
+        <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
+          <h1 className="font-display text-2xl font-bold">Post not found</h1>
+          <p className="text-muted-foreground">It may have been deleted.</p>
+          <Link to="/forum">
+            <Button variant="outline">Back to Forum</Button>
+          </Link>
+        </div>
+      </Layout>
+    );
+  }
+
+  const author = post.author || {};
+  const game = post.game;
 
   return (
     <Layout>
       <div className="min-h-screen py-8">
         <div className="container mx-auto px-4">
-          {/* Back Button */}
-          <Link 
-            to="/forum" 
+          <Link
+            to="/forum"
             className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary transition-colors mb-6"
           >
             <ChevronLeft className="w-4 h-4" />
@@ -481,185 +557,176 @@ const PostDetail: React.FC = () => {
           </Link>
 
           <div className="flex flex-col lg:flex-row gap-8">
-            {/* Main Content */}
-            <div className="flex-1">
-              {/* Post Header */}
+            {/* Main column */}
+            <div className="flex-1 min-w-0">
               <article className="glass-card p-6 sm:p-8">
-                {/* Tags */}
+                {/* Badges */}
                 <div className="flex items-center gap-2 flex-wrap mb-4">
-                  {mockPost.isPinned && (
-                    <span className="px-3 py-1 text-xs font-semibold bg-accent/20 text-accent rounded-full">
-                      📌 Pinned
+                  {post.isPinned && (
+                    <span className="flex items-center gap-1 px-3 py-1 text-xs font-semibold bg-yellow-500/20 text-yellow-400 rounded-full">
+                      <Pin className="w-3 h-3" /> Pinned
                     </span>
                   )}
-                  <Link 
-                    to={`/games/${mockPost.game.id}`}
-                    className="px-3 py-1 text-xs font-semibold bg-primary/20 text-primary rounded-full hover:bg-primary/30 transition-colors"
-                  >
-                    🎮 {mockPost.game.name}
-                  </Link>
+                  {post.isLocked && (
+                    <span className="flex items-center gap-1 px-3 py-1 text-xs font-semibold bg-red-500/20 text-red-400 rounded-full">
+                      <Lock className="w-3 h-3" /> Locked
+                    </span>
+                  )}
+                  {game && (
+                    <Link
+                      to={`/games/${game._id}`}
+                      className="px-3 py-1 text-xs font-semibold bg-primary/20 text-primary rounded-full hover:bg-primary/30 transition-colors"
+                    >
+                      🎮 {game.title}
+                    </Link>
+                  )}
                   <span className="px-3 py-1 text-xs font-semibold bg-muted text-muted-foreground rounded-full capitalize">
-                    {mockPost.category}
+                    {post.postType}
                   </span>
                 </div>
 
-                {/* Title */}
-                <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground mb-6">
-                  {mockPost.title}
+                <h1 className="font-display text-2xl sm:text-3xl font-bold text-foreground mb-6 break-words">
+                  {post.title}
                 </h1>
 
-                {/* Author Info */}
+                {/* Author */}
                 <div className="flex items-center gap-4 pb-6 border-b border-border">
                   <Avatar className="w-12 h-12">
-                    <AvatarImage src={mockPost.author.avatar} alt={mockPost.author.username} />
-                    <AvatarFallback>{mockPost.author.username[0]}</AvatarFallback>
+                    <AvatarImage src={author.avatar} alt={author.username} />
+                    <AvatarFallback>{(author.username || '?')[0]}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <Link 
-                      to={`/profile/${mockPost.author.username}`}
+                    <Link
+                      to={`/profile/${author.username}`}
                       className="font-semibold text-foreground hover:text-primary transition-colors"
                     >
-                      {mockPost.author.username}
+                      {author.username || 'Deleted user'}
                     </Link>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span className="text-primary">{mockPost.author.role}</span>
-                      <span>•</span>
-                      <span>{mockPost.author.posts} posts</span>
-                      <span>•</span>
-                      <span>Joined {mockPost.author.joinDate}</span>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                      <span className="text-primary">Level {author.level || 1}</span>
+                      {author.postsCount != null && (
+                        <>
+                          <span>•</span>
+                          <span>{author.postsCount} posts</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Post Stats */}
-                <div className="flex items-center gap-4 py-4 text-sm text-muted-foreground border-b border-border">
+                {/* Stats */}
+                <div className="flex items-center gap-4 py-4 text-sm text-muted-foreground border-b border-border flex-wrap">
                   <span className="flex items-center gap-1">
                     <Clock className="w-4 h-4" />
-                    {formatDate(mockPost.createdAt)}
+                    {new Date(post.createdAt).toLocaleString()}
                   </span>
                   <span className="flex items-center gap-1">
                     <Eye className="w-4 h-4" />
-                    {mockPost.views.toLocaleString()} views
+                    {(post.viewsCount || 0).toLocaleString()} views
                   </span>
                   <span className="flex items-center gap-1">
                     <MessageSquare className="w-4 h-4" />
-                    {mockPost.comments} comments
+                    {totalComments} comments
                   </span>
                 </div>
 
-                {/* Post Content */}
-                <div className="py-6 prose prose-invert max-w-none">
-                  <div className="text-foreground/90 leading-relaxed whitespace-pre-wrap">
-                    {mockPost.content.split('\n').map((line, i) => {
-                      if (line.startsWith('## ')) {
-                        return <h2 key={i} className="text-xl font-display font-bold text-foreground mt-6 mb-3">{line.replace('## ', '')}</h2>;
-                      }
-                      if (line.startsWith('### ')) {
-                        return <h3 key={i} className="text-lg font-display font-semibold text-foreground mt-4 mb-2">{line.replace('### ', '')}</h3>;
-                      }
-                      if (line.startsWith('- **')) {
-                        const text = line.replace('- **', '').replace('**', ': ');
-                        return <li key={i} className="ml-4 text-foreground/90">{text}</li>;
-                      }
-                      if (line.startsWith('1. **') || line.startsWith('2. **') || line.startsWith('3. **')) {
-                        return <li key={i} className="ml-4 text-foreground/90 list-decimal">{line.replace(/^\d+\. /, '')}</li>;
-                      }
-                      if (line.includes('**')) {
-                        const parts = line.split('**');
-                        return (
-                          <p key={i} className="my-2">
-                            {parts.map((part, j) => j % 2 === 1 ? <strong key={j} className="text-primary">{part}</strong> : part)}
-                          </p>
-                        );
-                      }
-                      if (line.startsWith('*') && line.endsWith('*') && !line.startsWith('**')) {
-                        return <p key={i} className="my-2 italic text-muted-foreground">{line.replace(/\*/g, '')}</p>;
-                      }
-                      if (line.trim() === '') return <br key={i} />;
-                      return <p key={i} className="my-2">{line}</p>;
-                    })}
-                  </div>
+                {/* Content (plain text; whitespace preserved) */}
+                <div className="py-6 text-foreground/90 leading-relaxed whitespace-pre-wrap break-words">
+                  {post.content}
                 </div>
 
                 {/* Tags */}
-                <div className="flex items-center gap-2 flex-wrap py-4 border-t border-border">
-                  {mockPost.tags.map((tag) => (
-                    <span 
-                      key={tag}
-                      className="px-3 py-1 text-xs bg-muted text-muted-foreground rounded-full hover:bg-muted/80 cursor-pointer transition-colors"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
+                {post.tags?.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap py-4 border-t border-border">
+                    {post.tags.map((tag: string) => (
+                      <span
+                        key={tag}
+                        className="px-3 py-1 text-xs bg-muted text-muted-foreground rounded-full"
+                      >
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
 
-                {/* Action Buttons */}
+                {/* Actions */}
                 <div className="flex items-center justify-between pt-4 border-t border-border">
                   <div className="flex items-center gap-2">
-                    <Button 
-                      variant={liked ? 'default' : 'outline'} 
+                    <Button
+                      variant={postVote === 1 ? 'default' : 'outline'}
                       size="sm"
-                      onClick={handleLike}
-                      className={liked ? 'bg-success hover:bg-success/90' : ''}
+                      onClick={() => votePost(1)}
+                      className={postVote === 1 ? 'bg-success hover:bg-success/90' : ''}
                     >
                       <ThumbsUp className="w-4 h-4 mr-1" />
-                      {likes}
+                      {post.likesCount || 0}
                     </Button>
-                    <Button 
-                      variant={disliked ? 'default' : 'outline'} 
+                    <Button
+                      variant={postVote === -1 ? 'default' : 'outline'}
                       size="sm"
-                      onClick={handleDislike}
-                      className={disliked ? 'bg-destructive hover:bg-destructive/90' : ''}
+                      onClick={() => votePost(-1)}
+                      className={postVote === -1 ? 'bg-destructive hover:bg-destructive/90' : ''}
                     >
                       <ThumbsDown className="w-4 h-4 mr-1" />
-                      {dislikes}
+                      {post.dislikesCount || 0}
                     </Button>
                   </div>
+
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" size="sm" onClick={handleShare}>
                       <Share2 className="w-4 h-4" />
                       <span className="hidden sm:inline ml-1">Share</span>
                     </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={handleBookmark}
-                      className={bookmarked ? 'text-accent' : ''}
-                    >
-                      <Bookmark className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} />
-                      <span className="hidden sm:inline ml-1">Save</span>
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
-                          <Flag className="w-4 h-4 mr-2" />
-                          Report Post
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+
+                    {(isPostOwner || isMod) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {isMod && (
+                            <>
+                              <DropdownMenuItem onClick={() => toggleFlag('pin')}>
+                                <Pin className="w-4 h-4 mr-2" />
+                                {post.isPinned ? 'Unpin post' : 'Pin post'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => toggleFlag('lock')}>
+                                <Lock className="w-4 h-4 mr-2" />
+                                {post.isLocked ? 'Unlock comments' : 'Lock comments'}
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                          <DropdownMenuItem onClick={deletePost} className="text-destructive">
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete post
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
                   </div>
                 </div>
               </article>
 
-              {/* Comments Section */}
+              {/* Comments */}
               <section className="mt-8">
                 <h2 className="font-display text-xl font-bold text-foreground mb-6 flex items-center gap-2">
                   <MessageSquare className="w-5 h-5 text-primary" />
-                  Comments ({mockPost.comments})
+                  Comments ({totalComments})
                 </h2>
 
-                {/* New Comment Form */}
                 <div className="glass-card p-4 sm:p-6 mb-6">
-                  {isAuthenticated ? (
+                  {post.isLocked ? (
+                    <p className="text-center text-muted-foreground py-2 flex items-center justify-center gap-2">
+                      <Lock className="w-4 h-4" />
+                      This discussion is locked. New comments are disabled.
+                    </p>
+                  ) : isAuthenticated && user ? (
                     <div className="flex gap-4">
                       <Avatar className="w-10 h-10 shrink-0">
-                        <AvatarImage src={user?.avatar} alt={user?.username} />
-                        <AvatarFallback>{user?.username?.[0]}</AvatarFallback>
+                        <AvatarImage src={user.avatar} alt={user.username} />
+                        <AvatarFallback>{user.username?.[0]}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1">
                         <Textarea
@@ -667,11 +734,15 @@ const PostDetail: React.FC = () => {
                           value={newComment}
                           onChange={(e) => setNewComment(e.target.value)}
                           className="min-h-[100px] resize-none mb-3"
+                          maxLength={5000}
                         />
                         <div className="flex justify-end">
-                          <Button onClick={handleSubmitComment} disabled={!newComment.trim()}>
+                          <Button
+                            onClick={submitTopLevelComment}
+                            disabled={submitting || !newComment.trim()}
+                          >
                             <Send className="w-4 h-4 mr-2" />
-                            Post Comment
+                            {submitting ? 'Posting...' : 'Post Comment'}
                           </Button>
                         </div>
                       </div>
@@ -686,84 +757,110 @@ const PostDetail: React.FC = () => {
                   )}
                 </div>
 
-                {/* Comments List */}
-                <div className="glass-card divide-y divide-border">
-                  {mockComments.map((comment) => (
-                    <CommentItem key={comment.id} comment={comment} />
-                  ))}
-                </div>
+                {comments.length === 0 ? (
+                  <div className="glass-card p-8 text-center text-muted-foreground">
+                    No comments yet. Start the conversation!
+                  </div>
+                ) : (
+                  <div className="glass-card divide-y divide-border px-4 sm:px-6">
+                    {comments.map((comment) => (
+                      <CommentItem
+                        key={comment._id}
+                        comment={comment}
+                        currentUser={user}
+                        votes={commentVotes}
+                        locked={!!post.isLocked}
+                        onVote={voteComment}
+                        onReply={(parentId, content) => postComment(content, parentId)}
+                        onEdit={editComment}
+                        onDelete={deleteComment}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
             </div>
 
             {/* Sidebar */}
-            <aside className="w-full lg:w-80 space-y-6">
-              {/* Game Info */}
-              <div className="glass-card p-5">
-                <h3 className="font-display font-semibold text-lg mb-4">About this Game</h3>
-                <Link to={`/games/${mockPost.game.id}`} className="flex items-center gap-3 group">
-                  <img 
-                    src={mockPost.game.cover} 
-                    alt={mockPost.game.name}
-                    className="w-16 h-16 rounded-lg object-cover"
-                  />
-                  <div>
-                    <h4 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {mockPost.game.name}
-                    </h4>
-                    <p className="text-sm text-muted-foreground">View all discussions</p>
-                  </div>
-                </Link>
-              </div>
+            <aside className="w-full lg:w-80 space-y-6 shrink-0">
+              {game && (
+                <div className="glass-card p-5">
+                  <h3 className="font-display font-semibold text-lg mb-4">About this Game</h3>
+                  <Link to={`/games/${game._id}`} className="flex items-center gap-3 group">
+                    <img
+                      src={game.coverImage}
+                      alt={game.title}
+                      className="w-16 h-16 rounded-lg object-cover"
+                    />
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-foreground group-hover:text-primary transition-colors truncate">
+                        {game.title}
+                      </h4>
+                      {game.developer && (
+                        <p className="text-sm text-muted-foreground truncate">{game.developer}</p>
+                      )}
+                    </div>
+                  </Link>
+                </div>
+              )}
 
-              {/* Author Card */}
               <div className="glass-card p-5">
                 <h3 className="font-display font-semibold text-lg mb-4">About the Author</h3>
-                <Link to={`/profile/${mockPost.author.username}`} className="flex items-center gap-3 group mb-4">
+                <Link
+                  to={`/profile/${author.username}`}
+                  className="flex items-center gap-3 group mb-4"
+                >
                   <Avatar className="w-12 h-12">
-                    <AvatarImage src={mockPost.author.avatar} alt={mockPost.author.username} />
-                    <AvatarFallback>{mockPost.author.username[0]}</AvatarFallback>
+                    <AvatarImage src={author.avatar} alt={author.username} />
+                    <AvatarFallback>{(author.username || '?')[0]}</AvatarFallback>
                   </Avatar>
                   <div>
                     <h4 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {mockPost.author.username}
+                      {author.username || 'Deleted user'}
                     </h4>
-                    <p className="text-sm text-primary">{mockPost.author.role}</p>
+                    <p className="text-sm text-primary">Level {author.level || 1}</p>
                   </div>
                 </Link>
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Member since</span>
-                    <span className="text-foreground">{mockPost.author.joinDate}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Total posts</span>
-                    <span className="text-foreground">{mockPost.author.posts}</span>
-                  </div>
+                  {author.createdAt && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Member since</span>
+                      <span className="text-foreground">
+                        {new Date(author.createdAt).toLocaleDateString(undefined, {
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                  )}
+                  {author.postsCount != null && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Total posts</span>
+                      <span className="text-foreground">{author.postsCount}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Related Discussions */}
-              <div className="glass-card p-5">
-                <h3 className="font-display font-semibold text-lg mb-4">Related Discussions</h3>
-                <div className="space-y-3">
-                  {[
-                    { title: 'New DLC boss ranking - hardest to easiest', comments: 156 },
-                    { title: 'Best farming spots in Shadow of the Erdtree', comments: 89 },
-                    { title: 'Hidden questlines guide - Full walkthrough', comments: 234 },
-                  ].map((post, i) => (
-                    <Link 
-                      key={i}
-                      to={`/forum/${i + 2}`}
-                      className="block group"
-                    >
-                      <p className="text-sm text-foreground group-hover:text-primary transition-colors line-clamp-2">
-                        {post.title}
-                      </p>
-                      <span className="text-xs text-muted-foreground">{post.comments} comments</span>
-                    </Link>
-                  ))}
+              {related.length > 0 && (
+                <div className="glass-card p-5">
+                  <h3 className="font-display font-semibold text-lg mb-4">
+                    More about {game?.title || 'this game'}
+                  </h3>
+                  <div className="space-y-3">
+                    {related.map((p) => (
+                      <Link key={p._id} to={`/forum/${p._id}`} className="block group">
+                        <p className="text-sm text-foreground group-hover:text-primary transition-colors line-clamp-2">
+                          {p.title}
+                        </p>
+                        <span className="text-xs text-muted-foreground">
+                          {p.commentsCount || 0} comments • {timeAgo(p.createdAt)}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </aside>
           </div>
         </div>

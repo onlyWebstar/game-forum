@@ -43,6 +43,8 @@ router.post('/', [
       targetId
     });
 
+    const previousValue = existingLike ? existingLike.value : null;
+
     let message = '';
     let likesChange = 0;
     let dislikesChange = 0;
@@ -100,10 +102,10 @@ router.post('/', [
       data: {
         likesCount: updatedTarget.likesCount,
         dislikesCount: updatedTarget.dislikesCount,
-        userLikeValue: existingLike && existingLike.value === value ? null : value
+        userLikeValue: previousValue === value ? null : value
       }
     });
-    } catch (error) {
+  } catch (error) {
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
@@ -111,7 +113,7 @@ router.post('/', [
       });
     }
     res.status(500).json({ success: false, message: error.message });
-    }
+  }
 });
 
 // @route   GET /api/likes/check
@@ -135,6 +137,7 @@ router.get('/check', protect, async (req, res) => {
       targetType,
       targetId: { $in: ids }
     }).lean();
+
     // Create a map of targetId -> value
     const likeMap = {};
     likes.forEach(like => {

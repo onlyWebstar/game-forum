@@ -1,6 +1,6 @@
 // pages/CreatePost.tsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   PenTool, 
   Layout as LayoutIcon, 
@@ -27,7 +27,8 @@ const CreatePost: React.FC = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [postType, setPostType] = useState<'discussion' | 'review' | 'guide' | 'question'>('discussion');
-  const [selectedGame, setSelectedGame] = useState('');
+  const [searchParams] = useSearchParams();
+  const [selectedGame, setSelectedGame] = useState(searchParams.get('game') || '');
   const [tags, setTags] = useState('');
   const [games, setGames] = useState<any[]>([]);
   

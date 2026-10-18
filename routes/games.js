@@ -90,11 +90,11 @@ router.get('/', async (req, res) => {
 // @access  Public
 router.get('/:id', async (req, res) => {
   try {
+    const { id } = req.params;
+    const filter = /^[a-f\d]{24}$/i.test(id) ? { _id: id } : { slug: id.toLowerCase() };
+
     const game = await Game.findOne({
-      $or: [
-        { _id: req.params.id },
-        { slug: req.params.id }
-      ],
+      ...filter,
       isActive: true
     }).populate('addedBy', 'username avatar role');
 
@@ -167,6 +167,7 @@ router.put('/:id', [
 ], async (req, res) => {
   try {
     const game = await Game.findById(req.params.id);
+
     if (!game) {
       return res.status(404).json({
         success: false,
@@ -253,4 +254,4 @@ router.get('/:id/stats', async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = router;;
