@@ -19,56 +19,71 @@ const statsRoutes = require('./routes/stats');
 
 const app = express();
 
-// Middleware - Allow requests from any localhost port
+// Render (and most hosts) sit behind a proxy
+app.set('trust proxy', 1);
+
+/* ------------------------------------------------------------------
+   CORS
+   FRONTEND_URL can hold one URL or several, comma-separated, e.g.
+   https://game-forum-alpha.vercel.app,http://localhost:8080
+------------------------------------------------------------------- */
+const normalizeOrigin = (url) => (url || '').trim().replace(/\/+$/, '');
+
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:8080',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:8080',
+  ...(process.env.FRONTEND_URL || '').split(',').map(normalizeOrigin)
+].filter(Boolean);
+
+console.log('Allowed CORS origins:', allowedOrigins.join(', '));
+
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+  origin: (origin, callback) => {
+    // No Origin header = curl, server-to-server, health checks
     if (!origin) return callback(null, true);
-    
-    // Allowed origins
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:8080',
-      'http://127.0.0.1:3000',
-      'http://127.0.0.1:8080',
-      process.env.FRONTEND_URL
-    ].filter(Boolean);
-    
-    if (allowedOrigins.includes(origin)) {
+
+    if (allowedOrigins.includes(normalizeOrigin(origin))) {
       return callback(null, true);
     }
-    
-    callback(new Error('Not allowed by CORS'));
+
+    // Log the exact mismatch so it is easy to spot in Render's logs.
+    // callback(null, false) rejects cleanly instead of throwing a 500.
+    console.warn(`CORS blocked origin: ${origin}`);
+    return callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Add keep-alive headers
+// Keep-alive headers
 app.use((req, res, next) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('Keep-Alive', 'timeout=120');
   next();
 });
 
-// MongoDB Connection (connect first)
-mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/game-forum', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log('✅ MongoDB Connected'))
-.catch(err => console.error('❌ MongoDB Connection Error:', err));
+// MongoDB connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/game-forum';
 
-// Session configuration (after MongoDB connection)
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('✅ MongoDB Connected'))
+  .catch(err => console.error('❌ MongoDB Connection Error:', err));
+
+// Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
   store: MongoStore.create({
-    mongoUrl: process.env.MONGODB_URI || 'mongodb://localhost:27017/game-forum',
+    mongoUrl: MONGODB_URI,
     touchAfter: 24 * 3600 // lazy session update
   }),
   cookie: {
@@ -93,17 +108,17 @@ app.use('/api/stats', statsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'ok', 
+  res.status(200).json({
+    status: 'ok',
     timestamp: new Date(),
     uptime: process.uptime(),
     mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected'
   });
 });
 
-// Root health check for Render
+// Root route for Render
 app.get('/', (req, res) => {
-  res.status(200).json({ 
+  res.status(200).json({
     message: 'Game Forum API is running',
     health: '/api/health'
   });
@@ -131,15 +146,15 @@ const server = app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
 
-// Set timeout to 2 minutes for Render's free tier
+// Longer timeout for Render's free tier
 server.setTimeout(120000);
 
-// Handle graceful shutdown
+// Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM signal received: closing HTTP server');
   server.close(() => {
     console.log('HTTP server closed');
-    mongoose.connection.close(false, () => {
+    mongoose.connection.close(false).then(() => {
       console.log('MongoDB connection closed');
       process.exit(0);
     });
