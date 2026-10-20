@@ -282,6 +282,56 @@ router.post('/resend-verification', protect, async (req, res) => {
   }
 });
 
+// @route   POST /api/auth/resend-verification-email
+// @desc    Resend the verification link to an unverified account (no login needed)
+// @access  Public
+router.post('/resend-verification-email', [
+  body('email')
+    .isEmail()
+    .normalizeEmail({ gmail_remove_dots: false, gmail_remove_subaddress: false })
+    .withMessage('Invalid email')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0].msg });
+    }
+
+    // Same answer whether or not the account exists, so emails can't be probed
+    const generic = {
+      success: true,
+      message: 'If that account exists and is not verified, a new verification link has been sent.'
+    };
+
+    const user = await User.findOne({ email: req.body.email });
+    if (!user || user.emailVerified) {
+      return res.json(generic);
+    }
+
+    // Cooldown: the token was issued 24h before it expires
+    const lastSentAt = user.emailVerificationExpires
+      ? new Date(user.emailVerificationExpires).getTime() - 24 * 60 * 60 * 1000
+      : 0;
+    if (Date.now() - lastSentAt < 60 * 1000) {
+      return res.status(429).json({
+        success: false,
+        message: 'Please wait a minute before requesting another email.'
+      });
+    }
+
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    user.emailVerificationToken = crypto.createHash('sha256').update(verificationToken).digest('hex');
+    user.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
+    await user.save();
+
+    await sendVerificationEmail(user, verificationToken);
+
+    res.json(generic);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // @route   POST /api/auth/forgot-password
 // @desc    Request password reset
 // @access  Public
@@ -298,6 +348,18 @@ router.post('/forgot-password', [
 
     if (!user) {
       // Don't reveal if user exists
+      return res.json({
+        success: true,
+        message: 'If that email is registered, you will receive a password reset link'
+      });
+    }
+
+    // Cooldown: ignore repeat requests within 60s. Same response as success,
+    // so nothing is revealed about whether the account exists.
+    const lastResetSentAt = user.passwordResetExpires
+      ? new Date(user.passwordResetExpires).getTime() - 60 * 60 * 1000
+      : 0;
+    if (Date.now() - lastResetSentAt < 60 * 1000) {
       return res.json({
         success: true,
         message: 'If that email is registered, you will receive a password reset link'

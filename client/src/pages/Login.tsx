@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import api from '@/services/api';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -14,6 +15,9 @@ const Login: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
+  const [unverified, setUnverified] = useState(false);
+  const [resending, setResending] = useState(false);
+
   const { login, loginWithGoogle, loginWithDiscord } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -30,6 +34,7 @@ const Login: React.FC = () => {
       });
       navigate('/');
     } catch (error: any) {
+      setUnverified(!!error.emailNotVerified);
       toast({
         title: 'Login failed',
         description: error.message || 'Please check your credentials and try again.',
@@ -37,6 +42,25 @@ const Login: React.FC = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    setResending(true);
+    try {
+      await api.post('/auth/resend-verification-email', { email });
+      toast({
+        title: 'Email sent',
+        description: 'If your account needs verifying, a new link is on its way.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Please wait',
+        description: error.response?.data?.message || 'Could not send the email.',
+        variant: 'destructive',
+      });
+    } finally {
+      setResending(false);
     }
   };
 
@@ -140,6 +164,24 @@ const Login: React.FC = () => {
               <ArrowRight className="w-4 h-4" />
             </Button>
           </form>
+
+          {unverified && (
+            <div className="mt-4 p-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 text-sm">
+              <p className="text-foreground mb-3">
+                Your email isn't verified yet. Check your inbox (and spam folder) for the link, or
+                request a new one.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleResendVerification}
+                disabled={resending}
+              >
+                {resending ? 'Sending...' : 'Resend verification email'}
+              </Button>
+            </div>
+          )}
 
           {/* Divider */}
           <div className="flex items-center gap-4 my-6">

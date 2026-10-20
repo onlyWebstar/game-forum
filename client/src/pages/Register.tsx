@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import api from '@/services/api';
 
 const Register: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -67,6 +68,27 @@ const Register: React.FC = () => {
     }
   };
 
+  const [resending, setResending] = useState(false);
+
+  const handleResend = async () => {
+    setResending(true);
+    try {
+      await api.post('/auth/resend-verification-email', { email: registeredEmail });
+      toast({
+        title: 'Email sent',
+        description: `If ${registeredEmail} still needs verifying, a new link is on its way.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Please wait',
+        description: error.response?.data?.message || 'Could not resend the email.',
+        variant: 'destructive',
+      });
+    } finally {
+      setResending(false);
+    }
+  };
+
   // Show verification success screen
   if (showVerificationMessage) {
     return (
@@ -96,7 +118,12 @@ const Register: React.FC = () => {
 
             <p className="text-sm text-muted-foreground mb-4">
               Didn't receive the email? Check your spam folder or{' '}
-              <button className="text-primary hover:underline">
+              <button
+                type="button"
+                onClick={handleResend}
+                disabled={resending}
+                className="text-primary hover:underline disabled:opacity-50"
+              >
                 resend verification email
               </button>
             </p>

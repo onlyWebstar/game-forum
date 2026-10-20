@@ -106,7 +106,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     } catch (error: any) {
       console.error('Login error:', error);
-      throw new Error(error.response?.data?.message || 'Invalid credentials');
+      if (!error.response) {
+        throw new Error(
+          'Cannot reach the server. It may be waking up (free hosting sleeps when idle). Wait a minute and try again.'
+        );
+      }
+      const loginError: any = new Error(error.response.data?.message || 'Invalid credentials');
+      loginError.emailNotVerified = error.response.data?.emailVerified === false;
+      throw loginError;
     } finally {
       setIsLoading(false);
     }
@@ -124,7 +131,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // their email first, then log in.
     } catch (error: any) {
       console.error('Registration error:', error);
-      throw new Error(error.response?.data?.message || 'Registration failed');
+      if (!error.response) {
+        throw new Error(
+          'Cannot reach the server. It may be waking up (free hosting sleeps when idle). Wait a minute and try again.'
+        );
+      }
+      throw new Error(error.response.data?.message || 'Registration failed');
     } finally {
       setIsLoading(false);
     }
