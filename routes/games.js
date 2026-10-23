@@ -194,6 +194,15 @@ router.put('/:id', [
       game
     });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Another game already uses this title'
+      });
+    }
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -254,4 +263,4 @@ router.get('/:id/stats', async (req, res) => {
   }
 });
 
-module.exports = router;;
+module.exports = router;
