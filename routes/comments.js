@@ -4,6 +4,8 @@ const router = express.Router();
 const Comment = require('../models/Comment');
 const Post = require('../models/Post');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
+const { notify } = require('../services/notifications');
 const { protect } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 
@@ -140,6 +142,29 @@ router.post('/', [
       $inc: { commentsCount: 1, experience: 5 }
     });
 
+    // Notifications (fire-and-forget: a failure here never breaks commenting)
+    const parentAuthor = parentComment ? String(parentComment.author) : null;
+    if (parentAuthor) {
+      notify({
+        recipient: parentAuthor,
+        actor: req.user._id,
+        type: 'reply',
+        post: post._id,
+        comment: comment._id
+      });
+    }
+    // The post's author hears about top-level comments, and about replies
+    // unless they are the person being replied to (they already got a 'reply')
+    if (String(post.author) !== parentAuthor) {
+      notify({
+        recipient: post.author,
+        actor: req.user._id,
+        type: 'comment',
+        post: post._id,
+        comment: comment._id
+      });
+    }
+
     const populatedComment = await Comment.findById(comment._id)
       .populate('author', 'username avatar role level badges');
 
@@ -151,6 +176,7 @@ router.post('/', [
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
 // @route   PUT /api/comments/:id
 // @desc    Update a comment
 // @access  Private
@@ -224,6 +250,7 @@ router.delete('/:id', protect, async (req, res) => {
     comment.isDeleted = true;
     comment.deletedAt = new Date();
     comment.deletedBy = req.user._id;
+    await Notification.deleteMany({ comment: comment._id });
     await comment.save();
 
     // Update post stats

@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import api from '@/services/api';
+import { NotificationSettings, PrivacySettings } from '@/components/settings/SettingsSections';
 
 const Settings: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -85,8 +86,8 @@ const Settings: React.FC = () => {
             {/* Content */}
             <div className="md:col-span-3">
               {activeTab === 'password' && <PasswordSection />}
-              {activeTab === 'notifications' && <NotificationsSection />}
-              {activeTab === 'privacy' && <PrivacySection />}
+              {activeTab === 'notifications' && <NotificationSettings />}
+              {activeTab === 'privacy' && <PrivacySettings />}
               {activeTab === 'account' && <AccountSection />}
             </div>
           </div>

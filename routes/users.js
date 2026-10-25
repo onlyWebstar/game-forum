@@ -4,7 +4,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize, optionalAuth } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 
 const defaultAvatar = (username) =>
@@ -16,6 +16,50 @@ const getPaging = (query) => {
   const page = Math.max(parseInt(query.page) || 1, 1);
   const limit = Math.min(Math.max(parseInt(query.limit) || 20, 1), 100);
   return { page, limit, skip: (page - 1) * limit };
+};
+
+// The settings as the frontend sees them (explicit, with defaults)
+const settingsPayload = (user) => ({
+  notificationSettings: {
+    comments: user.notificationSettings?.comments !== false,
+    replies: user.notificationSettings?.replies !== false,
+    likes: user.notificationSettings?.likes !== false
+  },
+  privacy: {
+    profileVisibility: user.privacy?.profileVisibility || 'public',
+    showEmail: !!user.privacy?.showEmail,
+    showActivity: user.privacy?.showActivity !== false
+  }
+});
+
+/**
+ * Decide what a viewer may see of a profile.
+ * - The owner and staff (admin/moderator) can see everything.
+ * - 'private'  -> nobody else can see the profile.
+ * - 'members'  -> only logged-in users.
+ * - showActivity=false hides the posts/comments lists and last-seen time.
+ */
+const getAccess = (profileUser, viewer) => {
+  const isOwner = !!viewer && String(viewer._id) === String(profileUser._id);
+  const isStaff = !!viewer && ['admin', 'moderator'].includes(viewer.role);
+  const visibility = profileUser.privacy?.profileVisibility || 'public';
+
+  let canViewProfile = true;
+  let reason = null;
+  if (!isOwner && !isStaff) {
+    if (visibility === 'private') {
+      canViewProfile = false;
+      reason = 'private';
+    } else if (visibility === 'members' && !viewer) {
+      canViewProfile = false;
+      reason = 'members';
+    }
+  }
+
+  const activityShared = profileUser.privacy?.showActivity !== false;
+  const canViewActivity = canViewProfile && (isOwner || isStaff || activityShared);
+
+  return { isOwner, isStaff, canViewProfile, canViewActivity, reason };
 };
 
 /* ------------------------------------------------------------------
@@ -93,6 +137,60 @@ router.get('/leaderboard', async (req, res) => {
       total,
       users: users.map((u) => ({ ...u, avatar: u.avatar || defaultAvatar(u.username) }))
     });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// @route   GET /api/users/settings
+// @desc    My notification + privacy settings
+// @access  Private
+router.get('/settings', protect, async (req, res) => {
+  res.json({ success: true, ...settingsPayload(req.user) });
+});
+
+// @route   PUT /api/users/settings
+// @desc    Update my notification and/or privacy settings
+// @access  Private
+router.put('/settings', [
+  protect,
+  body('notificationSettings.comments').optional().isBoolean().withMessage('comments must be true or false'),
+  body('notificationSettings.replies').optional().isBoolean().withMessage('replies must be true or false'),
+  body('notificationSettings.likes').optional().isBoolean().withMessage('likes must be true or false'),
+  body('privacy.profileVisibility')
+    .optional()
+    .isIn(['public', 'members', 'private'])
+    .withMessage('profileVisibility must be public, members or private'),
+  body('privacy.showEmail').optional().isBoolean().withMessage('showEmail must be true or false'),
+  body('privacy.showActivity').optional().isBoolean().withMessage('showActivity must be true or false')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ success: false, message: errors.array()[0].msg });
+    }
+
+    const { notificationSettings = {}, privacy = {} } = req.body;
+    const user = await User.findById(req.user._id);
+
+    ['comments', 'replies', 'likes'].forEach((key) => {
+      if (typeof notificationSettings[key] === 'boolean') {
+        user.set(`notificationSettings.${key}`, notificationSettings[key]);
+      }
+    });
+
+    if (privacy.profileVisibility) {
+      user.set('privacy.profileVisibility', privacy.profileVisibility);
+    }
+    ['showEmail', 'showActivity'].forEach((key) => {
+      if (typeof privacy[key] === 'boolean') {
+        user.set(`privacy.${key}`, privacy[key]);
+      }
+    });
+
+    await user.save();
+
+    res.json({ success: true, ...settingsPayload(user) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -261,13 +359,15 @@ router.delete('/:id', [protect, authorize('admin')], async (req, res) => {
 });
 
 /* ------------------------------------------------------------------
-   DYNAMIC ROUTES - keep these last
+   DYNAMIC ROUTES - keep these last.
+   optionalAuth tells us who is looking (if anyone) so privacy
+   settings can be enforced.
 ------------------------------------------------------------------- */
 
 // @route   GET /api/users/:username
-// @desc    Public profile
-// @access  Public
-router.get('/:username', async (req, res) => {
+// @desc    Profile, filtered by the owner's privacy settings
+// @access  Public (respects privacy)
+router.get('/:username', optionalAuth, async (req, res) => {
   try {
     const user = await User.findOne({
       username: req.params.username,
@@ -278,41 +378,74 @@ router.get('/:username', async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    res.json({
-      success: true,
-      user: {
-        id: user._id,
-        username: user.username,
-        avatar: user.getAvatarUrl(),
-        bio: user.bio,
-        role: user.role,
-        level: user.level,
-        experience: user.experience,
-        badges: user.badges,
-        favoriteGames: user.favoriteGames,
-        postsCount: user.postsCount,
-        commentsCount: user.commentsCount,
-        likesReceived: user.likesReceived,
-        createdAt: user.createdAt,
-        lastSeen: user.lastSeen
-      }
-    });
+    const access = getAccess(user, req.user);
+
+    // Restricted: reveal only who this is, and why they can't see more
+    if (!access.canViewProfile) {
+      return res.json({
+        success: true,
+        restricted: true,
+        reason: access.reason,
+        user: {
+          id: user._id,
+          username: user.username,
+          avatar: user.getAvatarUrl()
+        }
+      });
+    }
+
+    const profile = {
+      id: user._id,
+      username: user.username,
+      avatar: user.getAvatarUrl(),
+      bio: user.bio,
+      role: user.role,
+      level: user.level,
+      experience: user.experience,
+      badges: user.badges,
+      favoriteGames: user.favoriteGames,
+      postsCount: user.postsCount,
+      commentsCount: user.commentsCount,
+      likesReceived: user.likesReceived,
+      createdAt: user.createdAt,
+      canViewActivity: access.canViewActivity
+    };
+
+    if (access.canViewActivity) profile.lastSeen = user.lastSeen;
+    if (user.privacy?.showEmail) profile.email = user.email;
+
+    res.json({ success: true, user: profile });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
 // @route   GET /api/users/:username/posts
-// @desc    A user's posts
-// @access  Public
-router.get('/:username/posts', async (req, res) => {
+// @desc    A user's posts (hidden if they keep activity private)
+// @access  Public (respects privacy)
+router.get('/:username/posts', optionalAuth, async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username, isActive: true });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    const access = getAccess(user, req.user);
+    if (!access.canViewProfile) {
+      return res.status(403).json({ success: false, message: 'This profile is not available' });
+    }
+
     const { page, limit, skip } = getPaging(req.query);
+
+    if (!access.canViewActivity) {
+      return res.json({
+        success: true,
+        hidden: true,
+        posts: [],
+        pagination: { page, limit, total: 0, pages: 0 }
+      });
+    }
+
     const query = { author: user._id, isDeleted: false };
 
     const [posts, total] = await Promise.all([
@@ -336,16 +469,31 @@ router.get('/:username/posts', async (req, res) => {
 });
 
 // @route   GET /api/users/:username/comments
-// @desc    A user's comments
-// @access  Public
-router.get('/:username/comments', async (req, res) => {
+// @desc    A user's comments (hidden if they keep activity private)
+// @access  Public (respects privacy)
+router.get('/:username/comments', optionalAuth, async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username, isActive: true });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    const access = getAccess(user, req.user);
+    if (!access.canViewProfile) {
+      return res.status(403).json({ success: false, message: 'This profile is not available' });
+    }
+
     const { page, limit, skip } = getPaging(req.query);
+
+    if (!access.canViewActivity) {
+      return res.json({
+        success: true,
+        hidden: true,
+        comments: [],
+        pagination: { page, limit, total: 0, pages: 0 }
+      });
+    }
+
     const query = { author: user._id, isDeleted: false };
 
     const [comments, total] = await Promise.all([

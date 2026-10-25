@@ -5,6 +5,7 @@ const Like = require('../models/Like');
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const User = require('../models/User');
+const { notify, removeNotification } = require('../services/notifications');
 const { protect } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 
@@ -91,6 +92,22 @@ router.post('/', [
       await User.findByIdAndUpdate(target.author, {
         $inc: { likesReceived: likesChange }
       });
+    }
+
+    // Notifications: only a standing LIKE notifies. Taking it back, or
+    // switching to a dislike, removes the notification again.
+    const finalValue = previousValue === value ? null : value;
+    const notifyArgs = {
+      recipient: target.author,
+      actor: req.user._id,
+      type: targetType === 'Post' ? 'post_like' : 'comment_like',
+      post: targetType === 'Post' ? target._id : target.post,
+      comment: targetType === 'Comment' ? target._id : null
+    };
+    if (finalValue === 1) {
+      notify(notifyArgs);
+    } else {
+      removeNotification(notifyArgs);
     }
 
     // Get updated target

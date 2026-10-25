@@ -4,6 +4,7 @@ const router = express.Router();
 const Post = require('../models/Post');
 const Game = require('../models/Game');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const { protect, authorize } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 
@@ -248,6 +249,7 @@ router.delete('/:id', protect, async (req, res) => {
 
     // Update game and user stats
     await Promise.all([
+      Notification.deleteMany({ post: post._id }),
       Game.findByIdAndUpdate(post.game, { $inc: { postsCount: -1 } }),
       User.findByIdAndUpdate(post.author, { $inc: { postsCount: -1 } })
     ]);

@@ -16,6 +16,7 @@ const likeRoutes = require('./routes/likes');
 const userRoutes = require('./routes/users');
 const searchRoutes = require('./routes/search');
 const statsRoutes = require('./routes/stats');
+const notificationRoutes = require('./routes/notifications');
 
 const app = express();
 
@@ -40,6 +41,11 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 console.log('Allowed CORS origins:', allowedOrigins.join(', '));
+console.log(
+  process.env.BREVO_API_KEY && process.env.EMAIL_FROM
+    ? `Email: Brevo configured (sender ${process.env.EMAIL_FROM})`
+    : 'Email: NOT configured (set BREVO_API_KEY and EMAIL_FROM) - no emails will be sent'
+);
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -105,6 +111,7 @@ app.use('/api/likes', likeRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/search', searchRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -100,6 +100,22 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  // Which in-app notifications this user wants
+  notificationSettings: {
+    comments: { type: Boolean, default: true },   // comments on my posts
+    replies: { type: Boolean, default: true },    // replies to my comments
+    likes: { type: Boolean, default: true }       // likes on my posts/comments
+  },
+  // Who can see what on this user's profile page
+  privacy: {
+    profileVisibility: {
+      type: String,
+      enum: ['public', 'members', 'private'],
+      default: 'public'
+    },
+    showEmail: { type: Boolean, default: false },
+    showActivity: { type: Boolean, default: true }
+  },
   passwordResetToken: {
     type: String
   },
@@ -142,10 +158,7 @@ userSchema.virtual('profileUrl').get(function() {
   return `/profile/${this.username}`;
 });
 
-// Indexes
-userSchema.index({ username: 1 });
-userSchema.index({ email: 1 });
-userSchema.index({ googleId: 1 });
-userSchema.index({ discordId: 1 });
+// Indexes: username, email, googleId and discordId are already indexed by
+// their `unique: true` definitions above, so they are not repeated here.
 
 module.exports = mongoose.model('User', userSchema);

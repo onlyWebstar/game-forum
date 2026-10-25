@@ -8,11 +8,19 @@ import {
   ThumbsUp,
   FileText,
   Trophy,
+  Lock,
+  Mail,
+  Clock,
+  EyeOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Layout from '@/components/layout/Layout';
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
+import { timeAgo } from '@/lib/time';
+
+const fallbackAvatar = (name: string) =>
+  `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${encodeURIComponent(name)}`;
 
 const Profile: React.FC = () => {
   const { username } = useParams();
@@ -20,6 +28,7 @@ const Profile: React.FC = () => {
 
   const [profile, setProfile] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
+  const [restricted, setRestricted] = useState<null | 'private' | 'members'>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -30,14 +39,23 @@ const Profile: React.FC = () => {
     const load = async () => {
       setLoading(true);
       setNotFound(false);
+      setRestricted(null);
+      setPosts([]);
       try {
-        const [profileRes, postsRes] = await Promise.all([
-          api.get(`/users/${username}`),
-          api.get(`/users/${username}/posts?limit=10`),
-        ]);
+        const { data } = await api.get(`/users/${username}`);
         if (cancelled) return;
-        setProfile(profileRes.data.user);
-        setPosts(postsRes.data.posts || []);
+        setProfile(data.user);
+
+        if (data.restricted) {
+          setRestricted(data.reason);
+          return;
+        }
+
+        // Only ask for the posts when the owner shares their activity
+        if (data.user.canViewActivity) {
+          const postsRes = await api.get(`/users/${username}/posts?limit=10`);
+          if (!cancelled) setPosts(postsRes.data.posts || []);
+        }
       } catch (error) {
         console.error('Failed to fetch profile', error);
         if (!cancelled) setNotFound(true);
@@ -50,7 +68,8 @@ const Profile: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [username]);
+    // Reload when the viewer logs in/out: visibility depends on who is looking
+  }, [username, currentUser?.id]);
 
   if (loading) {
     return (
@@ -65,18 +84,44 @@ const Profile: React.FC = () => {
       <Layout>
         <div className="p-20 text-center">
           <h1 className="font-display text-2xl font-bold mb-2">User not found</h1>
-          <p className="text-muted-foreground">
-            There is no active user called "{username}".
-          </p>
+          <p className="text-muted-foreground">There is no active user called "{username}".</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Locked profile: private, or members-only while logged out
+  if (restricted) {
+    return (
+      <Layout>
+        <div className="container mx-auto px-4 py-16 max-w-md">
+          <div className="glass-card p-8 text-center">
+            <img
+              src={profile.avatar || fallbackAvatar(profile.username)}
+              alt={profile.username}
+              className="w-24 h-24 rounded-full mx-auto mb-4 object-cover opacity-80"
+            />
+            <h1 className="font-display text-2xl font-bold mb-4">{profile.username}</h1>
+            <div className="flex items-center justify-center gap-2 text-muted-foreground mb-6">
+              <Lock className="w-4 h-4" />
+              <span>
+                {restricted === 'members'
+                  ? 'This profile is only visible to logged-in members.'
+                  : 'This profile is private.'}
+              </span>
+            </div>
+            {restricted === 'members' && (
+              <Link to="/login">
+                <Button>Log in to view</Button>
+              </Link>
+            )}
+          </div>
         </div>
       </Layout>
     );
   }
 
   const isOwnProfile = currentUser?.username === profile.username;
-  const avatar =
-    profile.avatar ||
-    `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${encodeURIComponent(profile.username)}`;
 
   const stats = [
     { label: 'Level', value: profile.level || 1, icon: Trophy },
@@ -94,11 +139,11 @@ const Profile: React.FC = () => {
             <div className="glass-card p-6 text-center">
               <div className="w-32 h-32 mx-auto mb-4 rounded-full overflow-hidden border-4 border-background ring-2 ring-primary/20">
                 <img
-                  src={avatar}
+                  src={profile.avatar || fallbackAvatar(profile.username)}
                   alt={profile.username}
                   className="w-full h-full object-cover"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?background=6366f1&color=fff&name=${encodeURIComponent(profile.username)}`;
+                    (e.target as HTMLImageElement).src = fallbackAvatar(profile.username);
                   }}
                 />
               </div>
@@ -116,9 +161,24 @@ const Profile: React.FC = () => {
 
             <div className="glass-card p-6 space-y-4">
               <div className="flex items-center gap-3 text-muted-foreground">
-                <Calendar className="w-4 h-4" />
+                <Calendar className="w-4 h-4 shrink-0" />
                 <span>Joined {new Date(profile.createdAt).toLocaleDateString()}</span>
               </div>
+
+              {profile.lastSeen && (
+                <div className="flex items-center gap-3 text-muted-foreground">
+                  <Clock className="w-4 h-4 shrink-0" />
+                  <span>Last active {timeAgo(profile.lastSeen)}</span>
+                </div>
+              )}
+
+              {profile.email && (
+                <div className="flex items-center gap-3 text-muted-foreground">
+                  <Mail className="w-4 h-4 shrink-0" />
+                  <span className="break-all">{profile.email}</span>
+                </div>
+              )}
+
               <div className="text-sm text-muted-foreground pt-4 border-t border-border">
                 {profile.bio ? (
                   profile.bio
@@ -148,7 +208,12 @@ const Profile: React.FC = () => {
             <div className="glass-card p-6">
               <h2 className="font-display text-xl font-bold mb-4">Recent Posts</h2>
 
-              {posts.length === 0 ? (
+              {!profile.canViewActivity ? (
+                <p className="text-center text-muted-foreground py-8 flex items-center justify-center gap-2">
+                  <EyeOff className="w-4 h-4" />
+                  {profile.username} keeps their activity private.
+                </p>
+              ) : posts.length === 0 ? (
                 <p className="text-center text-muted-foreground py-8">
                   {isOwnProfile
                     ? "You haven't posted anything yet."
