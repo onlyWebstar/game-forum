@@ -523,7 +523,7 @@ const AccountSection: React.FC = () => {
       await api.delete('/users/account');
       toast({
         title: 'Account Deleted',
-        description: 'Your account has been permanently deleted',
+        description: 'Your account has been deleted',
       });
       logout();
       navigate('/');
@@ -547,8 +547,8 @@ const AccountSection: React.FC = () => {
         <div>
           <h3 className="font-semibold text-lg mb-2">Delete Account</h3>
           <p className="text-muted-foreground mb-4">
-            Once you delete your account, there is no going back. All your posts, comments, and data
-            will be permanently removed.
+            Once you delete your account, there is no going back. Your account is deactivated and you will not be able to log in again. Your posts and comments
+            may stay visible under your username unless you contact us to have them removed.
           </p>
           <Button
             variant="destructive"
